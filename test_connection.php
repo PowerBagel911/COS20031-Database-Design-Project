@@ -8,7 +8,7 @@ $host = "feenix-mariadb-web.swin.edu.au";
 $port = 3306;  // Standard MySQL/MariaDB port
 $dbname = "s105089392_db";
 $username = "s105089392";
-$password = "ductri05";
+$password = ".";
 
 try {
     echo "Attempting to connect to database...\n";

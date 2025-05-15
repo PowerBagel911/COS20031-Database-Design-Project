@@ -10,7 +10,7 @@ $host = "feenix-mariadb-web.swin.edu.au";
 $port = 3306; // Explicitly set port
 $dbname = "s105089392_db";
 $username = "s105089392"; // Replace with your database username
-$password = "ductri05"; // Replace with your database password
+$password = "."; // Replace with your database password
 
 // Create connection
 $conn = new mysqli($host, $username, $password, $dbname);
