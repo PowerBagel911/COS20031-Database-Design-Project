@@ -1,7 +1,7 @@
 import streamlit as st
 import hashlib
 from archery_app.database import get_connection
-
+import secrets  # For generating secure random salts
 
 def initialize_auth_state():
     if "logged_in" not in st.session_state:
@@ -16,31 +16,69 @@ def initialize_auth_state():
         st.session_state.is_recorder = False
     if "is_admin" not in st.session_state:
         st.session_state.is_admin = False
+def generate_salt():
+    """Generate a cryptographically secure random salt"""
+    return secrets.token_hex(32)  # 64 character hex string (32 bytes)
 
+def hash_password(password, salt):
+    """Create a salted hash of the password"""
+    return hashlib.sha256((salt + password).encode()).hexdigest()
 
 def login_user(username, password):
     try:
-        # Hash the provided password directly
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Get user information
+        # First, get the user and their salt
         query = """
-        SELECT u.UserID, u.ArcherID, u.IsRecorder, u.IsAdmin, 
+        SELECT u.UserID, u.ArcherID, u.Salt, u.PasswordHash, u.HashType, u.IsRecorder, u.IsAdmin, 
                CONCAT(a.FirstName, ' ', a.LastName) AS ArcherName
         FROM AppUser u
         JOIN Archer a ON u.ArcherID = a.ArcherID
-        WHERE u.Username = %s AND u.PasswordHash = %s
+        WHERE u.Username = %s
         """
-        cursor.execute(query, (username, password_hash))
+        cursor.execute(query, (username,))
         user = cursor.fetchone()
+
+        if not user:
+            return False, "Invalid credentials. Please try again."
+
+        # Determine how to verify the password based on HashType
+        is_valid = False
+        
+        if user['HashType'] == 'salted_sha256' and user['Salt']:
+            # Verify using the stored salt
+            calculated_hash = hash_password(password, user['Salt'])
+            is_valid = (calculated_hash == user['PasswordHash'])
+        else:
+            # Legacy verification without salt
+            legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+            is_valid = (legacy_hash == user['PasswordHash'])
+            
+            # If that fails, try with the default pattern
+            if not is_valid:
+                default_pattern = f"aAa{username}$%"
+                default_hash = hashlib.sha256(default_pattern.encode()).hexdigest()
+                is_valid = (default_hash == user['PasswordHash'])
+                
+                # If valid with default pattern, upgrade to salted hash
+                if is_valid:
+                    new_salt = generate_salt()
+                    new_hash = hash_password(default_pattern, new_salt)
+                    
+                    # Update the user's password hash and salt
+                    update_query = """
+                    UPDATE AppUser 
+                    SET PasswordHash = %s, Salt = %s, HashType = 'salted_sha256'
+                    WHERE UserID = %s
+                    """
+                    cursor.execute(update_query, (new_hash, new_salt, user['UserID']))
+                    conn.commit()
 
         cursor.close()
         conn.close()
 
-        if user:
+        if is_valid:
             # Set session state variables
             st.session_state.logged_in = True
             st.session_state.user_id = user["UserID"]
@@ -51,30 +89,6 @@ def login_user(username, password):
             st.session_state.current_page = "Home"
             return True, "Login successful"
         else:
-            # Try with the default pattern as fallback
-            default_pattern = f"aAa{username}$%"
-            default_hash = hashlib.sha256(default_pattern.encode()).hexdigest()
-
-            if (
-                default_hash != password_hash
-            ):  # Only query again if hashes are different
-                # Try again with the default pattern
-                cursor = conn.cursor(dictionary=True)
-                cursor.execute(query, (username, default_hash))
-                user = cursor.fetchone()
-                cursor.close()
-
-                if user:
-                    # Set session state variables
-                    st.session_state.logged_in = True
-                    st.session_state.user_id = user["UserID"]
-                    st.session_state.archer_id = user["ArcherID"]
-                    st.session_state.archer_name = user["ArcherName"]
-                    st.session_state.is_recorder = user["IsRecorder"]
-                    st.session_state.is_admin = user["IsAdmin"]
-                    st.session_state.current_page = "Home"
-                    return True, "Login successful"
-
             return False, "Invalid credentials. Please try again."
 
     except Exception as err:

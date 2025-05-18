@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime
 import hashlib
 from archery_app.database import get_connection
-
+from archery_app.auth import generate_salt, hash_password
 
 def get_all_users():
     """Retrieve all users from the database"""
@@ -112,15 +112,17 @@ def manage_users():
 
         is_recorder = st.checkbox("Grant Recorder Privileges")
 
+        # In the "Create Account" section, replace the current password hashing with:
         if st.button("Create Account"):
             try:
                 conn = get_connection()
                 cursor = conn.cursor()
+                
+                # Generate a new salt and hash the password
+                salt = generate_salt()
+                password_hash = hash_password(default_password, salt)
 
-                # Hash the password
-                password_hash = hashlib.sha256(default_password.encode()).hexdigest()
-
-                # Call the stored procedure
+                # Call the stored procedure with updated parameters
                 result_args = cursor.callproc(
                     "uspManageUserAccount",
                     [
@@ -135,6 +137,12 @@ def manage_users():
                     ],
                 )
 
+                # Update the salt and hash type
+                cursor.execute(
+                    "UPDATE AppUser SET Salt = %s, HashType = 'salted_sha256' WHERE UserID = LAST_INSERT_ID()",
+                    (salt,)
+                )
+                
                 conn.commit()
 
                 # Get output parameters
@@ -194,20 +202,25 @@ def manage_users():
                             conn = get_connection()
                             cursor = conn.cursor()
 
-                            # Hash the new password
-                            password_hash = hashlib.sha256(
-                                new_password.encode()
-                            ).hexdigest()
+                            # Generate a new salt and hash the password
+                            salt = generate_salt()
+                            password_hash = hash_password(new_password, salt)
 
                             # Call the stored procedure
                             result_args = cursor.callproc(
                                 "uspManageUserAccount",
                                 ["RESET", user_id, 0, "", password_hash, False, 0, ""],
                             )
+                            
+                            # Update the salt and hash type
+                            cursor.execute(
+                                "UPDATE AppUser SET Salt = %s, HashType = 'salted_sha256' WHERE UserID = %s",
+                                (salt, user_id)
+                            )
 
                             conn.commit()
 
-                            # Get output parameters
+                            # Output parameters
                             result_id = result_args[6]
                             message = result_args[7]
 
@@ -222,30 +235,38 @@ def manage_users():
                         except mysql.connector.Error as err:
                             st.error(f"Database error: {err}")
             else:  # Reset to Default
+                # For reset to default password
+                # For reset to default password
                 if st.button("Reset to Default Password"):
                     try:
                         conn = get_connection()
                         cursor = conn.cursor()
 
-                        # Get archer ID from user ID for password pattern
-                        user_info = [u for u in users if u["UserID"] == user_id][0]
-                        archer_id = user_info["ArcherID"]
+                        # Get archer ID for the selected user
+                        # Find the user info for the selected user_id
+                        selected_user_info = [u for u in users if u["UserID"] == user_id][0]
+                        archer_id = selected_user_info["ArcherID"]  # This will be 183 for the selected user
 
-                        # Default password and hash
+                        # Default password and salt/hash
                         default_password = f"aAa{archer_id}$%"
-                        password_hash = hashlib.sha256(
-                            default_password.encode()
-                        ).hexdigest()
+                        salt = generate_salt()
+                        password_hash = hash_password(default_password, salt)
 
                         # Call the stored procedure
                         result_args = cursor.callproc(
                             "uspManageUserAccount",
                             ["RESET", user_id, 0, "", password_hash, False, 0, ""],
                         )
+                        
+                        # Update the salt and hash type
+                        cursor.execute(
+                            "UPDATE AppUser SET Salt = %s, HashType = 'salted_sha256' WHERE UserID = %s",
+                            (salt, user_id)
+                        )
 
                         conn.commit()
 
-                        # Get output parameters
+                        # Output parameters
                         result_id = result_args[6]
                         message = result_args[7]
 
@@ -260,7 +281,6 @@ def manage_users():
 
                     except mysql.connector.Error as err:
                         st.error(f"Database error: {err}")
-
         with col2:
             st.write("### Delete Account")
             st.warning("This action cannot be undone!")
@@ -424,6 +444,7 @@ def manage_account():
         new_password = st.text_input("New Password", type="password")
         confirm_password = st.text_input("Confirm Password", type="password")
 
+        # For custom password reset
         if st.button("Change Password"):
             if not new_password:
                 st.error("Password cannot be empty.")
@@ -434,13 +455,20 @@ def manage_account():
                     conn = get_connection()
                     cursor = conn.cursor()
 
-                    # Hash the new password
-                    password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+                    # Generate a new salt and hash the password
+                    salt = generate_salt()
+                    password_hash = hash_password(new_password, salt)
 
                     # Call the stored procedure
                     result_args = cursor.callproc(
                         "uspManageUserAccount",
                         ["RESET", current_user_id, 0, "", password_hash, False, 0, ""],
+                    )
+                    
+                    # Update the salt and hash type
+                    cursor.execute(
+                        "UPDATE AppUser SET Salt = %s, HashType = 'salted_sha256' WHERE UserID = %s",
+                        (salt, current_user_id)
                     )
 
                     conn.commit()
@@ -460,22 +488,32 @@ def manage_account():
                 except mysql.connector.Error as err:
                     st.error(f"Database error: {err}")
     else:  # Reset to Default
+        # For reset to default password
         if st.button("Reset to Default Password"):
             try:
                 conn = get_connection()
                 cursor = conn.cursor()
 
-                # Get current archer ID
+                # Get archer ID from user ID for password pattern
                 archer_id = st.session_state.archer_id
 
                 # Default password and hash
                 default_password = f"aAa{archer_id}$%"
-                password_hash = hashlib.sha256(default_password.encode()).hexdigest()
+                
+                # Generate a new salt and hash the password
+                salt = generate_salt()
+                password_hash = hash_password(default_password, salt)
 
                 # Call the stored procedure
                 result_args = cursor.callproc(
                     "uspManageUserAccount",
                     ["RESET", current_user_id, 0, "", password_hash, False, 0, ""],
+                )
+                
+                # Update the salt and hash type
+                cursor.execute(
+                    "UPDATE AppUser SET Salt = %s, HashType = 'salted_sha256' WHERE UserID = %s",
+                    (salt, current_user_id)
                 )
 
                 conn.commit()
@@ -489,7 +527,7 @@ def manage_account():
 
                 if result_id > 0:
                     st.success(f"{message}")
-                    st.info(f"Your new password is: {default_password}")
+                    st.info(f"New password is: {default_password}")
                 else:
                     st.error(message)
 
