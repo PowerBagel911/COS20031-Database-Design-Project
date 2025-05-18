@@ -1,321 +1,333 @@
 import streamlit as st
 import mysql.connector
 import pandas as pd
-from datetime import date
-from archery_app.database import get_connection, get_archers, get_rounds, get_equipment_types, get_competitions, get_staged_scores, get_recorders
+from datetime import date, datetime
+import hashlib
+from archery_app.database import get_connection
 
-def manage_archers():
-    st.header("Add New Archer")
-
-    first_name = st.text_input("First Name")
-    last_name = st.text_input("Last Name")
-    date_of_birth = st.date_input(
-        "Date of Birth", min_value=date(1900, 1, 1), max_value=date.today()
-    )
-    gender = st.selectbox("Gender", ["M", "F"])
-
-    equipment_types = get_equipment_types()
-    equipment_options = {
-        f"{e['EquipmentTypeID']} - {e['Name']}": e["EquipmentTypeID"]
-        for e in equipment_types
-    }
-
-    selected_equipment = st.selectbox(
-        "Default Equipment Type", options=list(equipment_options.keys())
-    )
-    equipment_id = equipment_options[selected_equipment]
-
-    if st.button("Add Archer"):
-        if not first_name or not last_name:
-            st.warning("Please fill in all required fields.")
-            return
-
-        try:
-            conn = get_connection()
-            cursor = conn.cursor()
-
-            # Call the stored procedure
-            cursor.callproc(
-                "uspAddArcher",
-                [first_name, last_name, date_of_birth, gender, equipment_id, 0],
-            )
-
-            # Execute the stored procedure
-            conn.commit()
-
-            # Direct query to get the last inserted ID
-            cursor.execute("SELECT LAST_INSERT_ID()")
-            archer_id = cursor.fetchone()[0]
-
-            # Get archer class info separately
-            archer_class = None
-            results = list(cursor.stored_results())
-            if results:
-                archer_class = results[0].fetchone()
-
-            cursor.close()
-            conn.close()
-
-            if archer_id:
-                st.success(f"Archer added successfully! Archer ID: {archer_id}")
-                if archer_class:
-                    st.info(f"Archer's Class: {archer_class}")
-            else:
-                st.warning("Archer was added but couldn't retrieve the ID.")
-
-        except mysql.connector.Error as err:
-            st.error(f"Database error: {err}")
-
-def approve_practice_scores():
-    st.header("Approve Practice Scores")
-
-    staged_scores = get_staged_scores()
-    if not staged_scores:
-        st.info("No staged scores waiting for approval.")
-        return
-
-    score_options = {
-        f"{s['StagedScoreID']} - {s['ArcherName']} - {s['RoundName']} - {s['Date']} - Score: {s['TotalScore']}": s[
-            "StagedScoreID"
-        ]
-        for s in staged_scores
-    }
-
-    selected_score = st.selectbox(
-        "Select Score to Approve", options=list(score_options.keys())
-    )
-    staged_score_id = score_options[selected_score]
-
-    # Changed from get_archers() to get_recorders() to only show valid recorders
-    recorders = get_recorders()
-
-    if not recorders:
-        st.warning(
-            "No recorders found in the database. Only users with recorder permissions can approve scores."
-        )
-        return
-
-    recorder_options = {
-        f"{r['ArcherID']} - {r['ArcherName']}": r["ArcherID"] for r in recorders
-    }
-
-    selected_recorder = st.selectbox(
-        "Approving Recorder", options=list(recorder_options.keys())
-    )
-    recorder_id = recorder_options[selected_recorder]
-
-    if st.button("Approve Score"):
-        try:
-            conn = get_connection()
-            cursor = conn.cursor()
-
-            # Using an output parameter for the procedure
-            args = [staged_score_id, recorder_id, 0]
-            result_args = cursor.callproc("uspApproveScore", args)
-
-            # Execute the stored procedure
-            conn.commit()
-
-            # Get the output parameter (ScoreID)
-            score_id = result_args[2]  # This is the OUT parameter from the procedure
-
-            cursor.close()
-            conn.close()
-
-            if score_id > 0:
-                st.success(f"Score approved successfully! Score ID: {score_id}")
-            else:
-                st.error(
-                    "Failed to approve score. The selected user does not have recorder privileges."
-                )
-
-        except mysql.connector.Error as err:
-            st.error(f"Database error: {err}")
-
-def manage_competitions():
-    st.header("Manage Competitions")
-
-    tab1, tab2 = st.tabs(["Create Competition", "Link Score to Competition"])
-
-    with tab1:
-        st.subheader("Create New Competition")
-        competition_name = st.text_input("Competition Name")
-        competition_date = st.date_input("Competition Date", value=date.today())
-        is_championship = st.checkbox("Is Championship")
-        description = st.text_area("Description")
-
-        if st.button("Create Competition"):
-            if not competition_name:
-                st.warning("Please enter a competition name.")
-                return
-
-            try:
-                conn = get_connection()
-                cursor = conn.cursor()
-
-                # Call the stored procedure
-                cursor.callproc(
-                    "uspCreateCompetition",
-                    [
-                        competition_name,
-                        competition_date,
-                        is_championship,
-                        description,
-                        0,
-                    ],
-                )
-
-                # Execute the stored procedure
-                conn.commit()
-
-                # Direct query to get the last inserted ID
-                cursor.execute("SELECT LAST_INSERT_ID()")
-                competition_id = cursor.fetchone()[0]
-
-                cursor.close()
-                conn.close()
-
-                if competition_id:
-                    st.success(
-                        f"Competition created successfully! Competition ID: {competition_id}"
-                    )
-                else:
-                    st.warning("Competition was created but couldn't retrieve the ID.")
-
-            except mysql.connector.Error as err:
-                st.error(f"Database error: {err}")
-
-    with tab2:
-        st.subheader("Link Score to Competition")
-
-        competitions = get_competitions()
-        competition_options = {
-            f"{c['CompetitionID']} - {c['CompetitionName']}": c["CompetitionID"]
-            for c in competitions
-        }
-
-        if not competition_options:
-            st.info("No competitions found in the database.")
-            return
-
-        selected_competition = st.selectbox(
-            "Select Competition",
-            options=list(competition_options.keys()),
-            key="link_comp",
-        )
-        competition_id = competition_options[selected_competition]
-
-        # Get approved scores that are not yet competition scores
+def get_all_users():
+    """Retrieve all users from the database"""
+    try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT s.ScoreID, 
-                   CONCAT(a.FirstName, ' ', a.LastName) AS ArcherName, 
-                   r.RoundName, 
-                   et.Name AS EquipmentType, 
-                   s.Date, 
-                   s.TotalScore 
-            FROM Score s
-            JOIN Archer a ON s.ArcherID = a.ArcherID
-            JOIN Round r ON s.RoundID = r.RoundID
-            JOIN EquipmentType et ON s.EquipmentTypeID = et.EquipmentTypeID
-            WHERE s.IsApproved = 1 AND s.IsCompetition = 0
-            ORDER BY s.ScoreID
-        """
-        )
-        scores = cursor.fetchall()
+        cursor.callproc("uspGetAllUsers")
+        
+        results = list(cursor.stored_results())
+        users = results[0].fetchall() if results else []
+        
         cursor.close()
         conn.close()
+        return users
+    except mysql.connector.Error as err:
+        st.error(f"Database error: {err}")
+        return []
 
-        if not scores:
-            st.info("No approved non-competition scores available.")
+def get_archers_without_accounts():
+    """Get archers that don't have user accounts yet"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.callproc("uspGetArchersWithoutAccounts")
+        
+        results = list(cursor.stored_results())
+        archers = results[0].fetchall() if results else []
+        
+        cursor.close()
+        conn.close()
+        return archers
+    except mysql.connector.Error as err:
+        st.error(f"Database error: {err}")
+        return []
+
+# 1. User Account Management
+def manage_users():
+    st.header("User Account Management")
+    
+    tab1, tab2, tab3 = st.tabs(["View Users", "Create User", "Manage Account"])
+    
+    with tab1:
+        # View all user accounts
+        st.subheader("All User Accounts")
+        
+        users = get_all_users()
+        if users:
+            # Convert boolean values to Yes/No for better display
+            for user in users:
+                user['IsRecorder'] = 'Yes' if user['IsRecorder'] else 'No'
+                user['IsAdmin'] = 'Yes' if user['IsAdmin'] else 'No'
+            
+            df = pd.DataFrame(users)
+            st.dataframe(df)
+        else:
+            st.info("No user accounts found.")
+    
+    with tab2:
+        # Create new user accounts
+        st.subheader("Create New User Account")
+        
+        archers = get_archers_without_accounts()
+        if not archers:
+            st.info("All archers already have accounts.")
             return
-
-        score_options = {
-            f"{s['ScoreID']} - {s['ArcherName']} - {s['RoundName']} - {s['Date']} - Score: {s['TotalScore']}": s[
-                "ScoreID"
-            ]
-            for s in scores
+        
+        archer_options = {
+            f"{a['ArcherID']} - {a['FirstName']} {a['LastName']}": a["ArcherID"] for a in archers
         }
-
-        selected_score = st.selectbox(
-            "Select Score to Link", options=list(score_options.keys())
+        
+        selected_archer = st.selectbox(
+            "Select Archer", options=list(archer_options.keys())
         )
-        score_id = score_options[selected_score]
-
-        if st.button("Link Score"):
+        archer_id = archer_options[selected_archer]
+        
+        username = st.text_input("Username", value=str(archer_id))
+        
+        # Default password follows the pattern: aAa{archer_id}$%
+        default_password = f"aAa{archer_id}$%"
+        st.info(f"Default password will be: {default_password}")
+        
+        is_recorder = st.checkbox("Grant Recorder Privileges")
+        
+        if st.button("Create Account"):
             try:
                 conn = get_connection()
                 cursor = conn.cursor()
-
+                
+                # Hash the password
+                password_hash = hashlib.sha256(default_password.encode()).hexdigest()
+                
                 # Call the stored procedure
-                cursor.callproc("uspLinkScoreToCompetition", [competition_id, score_id])
-
-                # Execute the stored procedure
+                result_args = cursor.callproc("uspManageUserAccount", 
+                    ['CREATE', 0, archer_id, username, password_hash, is_recorder, 0, '']
+                )
+                
                 conn.commit()
-
+                
+                # Get output parameters
+                result_id = result_args[6]
+                message = result_args[7]
+                
                 cursor.close()
                 conn.close()
-
-                st.success(f"Score linked to competition successfully!")
-
+                
+                if result_id > 0:
+                    st.success(f"{message} (User ID: {result_id})")
+                else:
+                    st.error(message)
+                
             except mysql.connector.Error as err:
                 st.error(f"Database error: {err}")
+    
+    with tab3:
+        # Change password or delete account
+        st.subheader("Change Password or Delete Account")
+        
+        users = get_all_users()
+        if not users:
+            st.info("No user accounts found.")
+            return
+        
+        user_options = {
+            f"{u['UserID']} - {u['ArcherName']} ({u['Username']})": u["UserID"] for u in users
+        }
+        
+        selected_user = st.selectbox(
+            "Select User", options=list(user_options.keys()), key="manage_user"
+        )
+        user_id = user_options[selected_user]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("### Change Password")
+            
+            password_option = st.radio(
+                "Password Option", 
+                ["Set Custom Password", "Reset to Default"]
+            )
+            
+            if password_option == "Set Custom Password":
+                new_password = st.text_input("New Password", type="password")
+                confirm_password = st.text_input("Confirm Password", type="password")
+                
+                if st.button("Change Password"):
+                    if not new_password:
+                        st.error("Password cannot be empty.")
+                    elif new_password != confirm_password:
+                        st.error("Passwords do not match.")
+                    else:
+                        try:
+                            conn = get_connection()
+                            cursor = conn.cursor()
+                            
+                            # Hash the new password
+                            password_hash = hashlib.sha256(new_password.encode()).hexdigest()
+                            
+                            # Call the stored procedure
+                            result_args = cursor.callproc("uspManageUserAccount", 
+                                ['RESET', user_id, 0, '', password_hash, False, 0, '']
+                            )
+                            
+                            conn.commit()
+                            
+                            # Get output parameters
+                            result_id = result_args[6]
+                            message = result_args[7]
+                            
+                            cursor.close()
+                            conn.close()
+                            
+                            if result_id > 0:
+                                st.success(f"{message}")
+                            else:
+                                st.error(message)
+                            
+                        except mysql.connector.Error as err:
+                            st.error(f"Database error: {err}")
+            else:  # Reset to Default
+                if st.button("Reset to Default Password"):
+                    try:
+                        conn = get_connection()
+                        cursor = conn.cursor()
+                        
+                        # Get archer ID from user ID for password pattern
+                        user_info = [u for u in users if u['UserID'] == user_id][0]
+                        archer_id = user_info['ArcherID']
+                        
+                        # Default password and hash
+                        default_password = f"aAa{archer_id}$%"
+                        password_hash = hashlib.sha256(default_password.encode()).hexdigest()
+                        
+                        # Call the stored procedure
+                        result_args = cursor.callproc("uspManageUserAccount", 
+                            ['RESET', user_id, 0, '', password_hash, False, 0, '']
+                        )
+                        
+                        conn.commit()
+                        
+                        # Get output parameters
+                        result_id = result_args[6]
+                        message = result_args[7]
+                        
+                        cursor.close()
+                        conn.close()
+                        
+                        if result_id > 0:
+                            st.success(f"{message}")
+                            st.info(f"New password is: {default_password}")
+                        else:
+                            st.error(message)
+                        
+                    except mysql.connector.Error as err:
+                        st.error(f"Database error: {err}")
+        
+        with col2:
+            st.write("### Delete Account")
+            st.warning("This action cannot be undone!")
+            confirm_delete = st.checkbox("I understand the consequences")
+            
+            if st.button("Delete User Account", disabled=not confirm_delete):
+                try:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    
+                    # Call the stored procedure
+                    result_args = cursor.callproc("uspManageUserAccount", 
+                        ['DELETE', user_id, 0, '', '', False, 0, '']
+                    )
+                    
+                    conn.commit()
+                    
+                    # Get output parameters
+                    result_id = result_args[6]
+                    message = result_args[7]
+                    
+                    cursor.close()
+                    conn.close()
+                    
+                    if result_id > 0:
+                        st.success(f"{message}")
+                    else:
+                        st.error(message)
+                    
+                except mysql.connector.Error as err:
+                    st.error(f"Database error: {err}")
 
-def generate_competition_results():
-    st.header("Generate Competition Results")
-
-    competitions = get_competitions()
-    competition_options = {
-        f"{c['CompetitionID']} - {c['CompetitionName']}": c["CompetitionID"]
-        for c in competitions
-    }
-
-    if not competition_options:
-        st.info("No competitions found in the database.")
-        return
-
-    selected_competition = st.selectbox(
-        "Select Competition", options=list(competition_options.keys())
-    )
-    competition_id = competition_options[selected_competition]
-
-    if st.button("Generate Results"):
-        try:
-            conn = get_connection()
-            cursor = conn.cursor(dictionary=True)
-
-            # Call the stored procedure
-            cursor.callproc("uspGenerateCompetitionResults", [competition_id])
-
-            # Fixed: Use proper syntax to iterate through results
-            results = list(cursor.stored_results())
-            if results:
-                competition_results = results[0].fetchall()
-                if competition_results:
-                    st.subheader(f"Results for {selected_competition.split(' - ')[1]}")
-
-                    # Group by category
-                    categories = {}
-                    for row in competition_results:
-                        category = row["Category"]
-                        if category not in categories:
-                            categories[category] = []
-                        categories[category].append(row)
-
-                    # Display results by category
-                    for category, rows in categories.items():
-                        st.subheader(f"Category: {category}")
-                        df = pd.DataFrame(rows)
-                        st.dataframe(df)
-                else:
-                    st.info("No results found for the selected competition.")
+# 2. Permission Management
+def manage_permissions():
+    st.header("User Permissions")
+    
+    tab1, tab2 = st.tabs(["Update Permissions", "View Permission Levels"])
+    
+    with tab1:
+        # Grant/revoke recorder privileges
+        st.subheader("Update User Permissions")
+        
+        users = get_all_users()
+        if not users:
+            st.info("No user accounts found.")
+            return
+        
+        user_options = {
+            f"{u['UserID']} - {u['ArcherName']} ({u['Username']})": u["UserID"] for u in users
+        }
+        
+        selected_user = st.selectbox(
+            "Select User", options=list(user_options.keys())
+        )
+        user_id = user_options[selected_user]
+        
+        # Get current permission status
+        selected_user_info = [u for u in users if u['UserID'] == user_id][0]
+        current_recorder_status = selected_user_info['IsRecorder'] == 'Yes'
+        
+        new_recorder_status = st.checkbox("Recorder Privileges", value=current_recorder_status)
+        
+        if st.button("Update Permissions"):
+            if new_recorder_status == current_recorder_status:
+                st.info("No changes to apply.")
             else:
-                st.info("No results returned from the procedure.")
-
-            cursor.close()
-            conn.close()
-
-        except mysql.connector.Error as err:
-            st.error(f"Database error: {err}")
+                try:
+                    conn = get_connection()
+                    cursor = conn.cursor()
+                    
+                    # Call the stored procedure
+                    result_args = cursor.callproc("uspUpdateRecorderPrivilege", 
+                        [user_id, new_recorder_status, False, '']
+                    )
+                    
+                    conn.commit()
+                    
+                    # Get output parameters
+                    success = result_args[2]
+                    message = result_args[3]
+                    
+                    cursor.close()
+                    conn.close()
+                    
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
+                    
+                except mysql.connector.Error as err:
+                    st.error(f"Database error: {err}")
+    
+    with tab2:
+        # View current permissions
+        st.subheader("Current Permission Levels")
+        
+        users = get_all_users()
+        if users:
+            # Create a simplified dataframe with just the permission information
+            permission_data = [{
+                'User ID': u['UserID'],
+                'Username': u['Username'],
+                'Archer Name': u['ArcherName'],
+                'Is Recorder': u['IsRecorder'],
+                'Is Admin': u['IsAdmin']
+            } for u in users]
+            
+            df = pd.DataFrame(permission_data)
+            st.dataframe(df)
+        else:
+            st.info("No user accounts found.")

@@ -10,11 +10,15 @@ from archery_app.archer_pages import (
     view_round_definitions,
     view_competition_results
 )
-from archery_app.admin_pages import (
+from archery_app.recorder_pages import (
     manage_archers,
     approve_practice_scores,
     manage_competitions,
     generate_competition_results
+)
+from archery_app.admin_pages import (
+    manage_users,
+    manage_permissions
 )
 
 # Initialize connection and auth state
@@ -54,6 +58,12 @@ def main_page():
             "Manage Competitions",
             "Generate Competition Results",
         ])
+    # Admin-only options - only the ones we need
+    if st.session_state.is_admin:
+        options.extend([
+            "User Management",
+            "Permission Management"
+        ])
     
     procedure = st.sidebar.selectbox("Select Procedure", options)
 
@@ -73,6 +83,10 @@ def main_page():
         manage_competitions()
     elif procedure == "Generate Competition Results" and (st.session_state.is_recorder or st.session_state.is_admin):
         generate_competition_results()
+    elif procedure == "User Management" and st.session_state.is_admin:
+        manage_users()
+    elif procedure == "Permission Management" and st.session_state.is_admin:
+        manage_permissions()
 
 # Main function
 if __name__ == "__main__":

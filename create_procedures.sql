@@ -346,5 +346,155 @@ END //
 DELIMITER ;
 
 -- ======================================================
+-- USE CASE 9: User Management (Admin Features)
+-- ======================================================
+
+DELIMITER //
+CREATE PROCEDURE uspGetAllUsers()
+BEGIN
+    -- Return all user accounts with archer information
+    SELECT u.UserID, u.ArcherID, u.Username, 
+           CONCAT(a.FirstName, ' ', a.LastName) AS ArcherName,
+           a.DateOfBirth, a.Gender, u.IsRecorder, u.IsAdmin
+    FROM AppUser u
+    JOIN Archer a ON u.ArcherID = a.ArcherID
+    ORDER BY u.UserID;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE uspGetArchersWithoutAccounts()
+BEGIN
+    -- Find archers who don't have user accounts
+    SELECT a.ArcherID, a.FirstName, a.LastName, a.DateOfBirth, a.Gender
+    FROM Archer a
+    LEFT JOIN AppUser u ON a.ArcherID = u.ArcherID
+    WHERE u.UserID IS NULL AND a.IsActive = TRUE
+    ORDER BY a.ArcherID;
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE uspManageUserAccount(
+    IN p_Action VARCHAR(10),
+    IN p_UserID INT,
+    IN p_ArcherID INT,
+    IN p_Username VARCHAR(50),
+    IN p_PasswordHash VARCHAR(255),
+    IN p_IsRecorder BOOLEAN,
+    OUT p_ResultID INT,
+    OUT p_Message VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_ResultID = 0;
+        SET p_Message = 'Database error occurred';
+    END;
+    
+    START TRANSACTION;
+    
+    -- Default values
+    SET p_ResultID = 0;
+    SET p_Message = '';
+    
+    CASE p_Action
+        WHEN 'CREATE' THEN
+            -- Check if archer exists
+            IF NOT EXISTS (SELECT 1 FROM Archer WHERE ArcherID = p_ArcherID) THEN
+                SET p_Message = 'Archer does not exist';
+                ROLLBACK;
+            -- Check if archer already has an account
+            ELSEIF EXISTS (SELECT 1 FROM AppUser WHERE ArcherID = p_ArcherID) THEN
+                SET p_Message = 'Archer already has an account';
+                ROLLBACK;
+            -- Check if username is already taken
+            ELSEIF EXISTS (SELECT 1 FROM AppUser WHERE Username = p_Username) THEN
+                SET p_Message = 'Username already exists';
+                ROLLBACK;
+            ELSE
+                -- Create new user account
+                INSERT INTO AppUser(ArcherID, Username, PasswordHash, IsRecorder, IsAdmin)
+                VALUES(p_ArcherID, p_Username, p_PasswordHash, p_IsRecorder, FALSE);
+                
+                SET p_ResultID = LAST_INSERT_ID();
+                SET p_Message = 'User account created successfully';
+                COMMIT;
+            END IF;
+            
+        WHEN 'DELETE' THEN
+            -- Check if user exists
+            IF NOT EXISTS (SELECT 1 FROM AppUser WHERE UserID = p_UserID) THEN
+                SET p_Message = 'User does not exist';
+                ROLLBACK;
+            ELSE
+                -- Delete user account
+                DELETE FROM AppUser WHERE UserID = p_UserID;
+                
+                SET p_ResultID = p_UserID;
+                SET p_Message = 'User account deleted successfully';
+                COMMIT;
+            END IF;
+            
+        WHEN 'RESET' THEN
+            -- Check if user exists
+            IF NOT EXISTS (SELECT 1 FROM AppUser WHERE UserID = p_UserID) THEN
+                SET p_Message = 'User does not exist';
+                ROLLBACK;
+            ELSE
+                -- Reset password
+                UPDATE AppUser
+                SET PasswordHash = p_PasswordHash
+                WHERE UserID = p_UserID;
+                
+                SET p_ResultID = p_UserID;
+                SET p_Message = 'Password reset successfully';
+                COMMIT;
+            END IF;
+            
+        ELSE
+            SET p_Message = 'Invalid action specified';
+            ROLLBACK;
+    END CASE;
+    
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE uspUpdateRecorderPrivilege(
+    IN p_UserID INT,
+    IN p_IsRecorder BOOLEAN,
+    OUT p_Success BOOLEAN,
+    OUT p_Message VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_Success = FALSE;
+        SET p_Message = 'Database error occurred';
+    END;
+    
+    -- Check if user exists
+    IF NOT EXISTS (SELECT 1 FROM AppUser WHERE UserID = p_UserID) THEN
+        SET p_Success = FALSE;
+        SET p_Message = 'User does not exist';
+    ELSE
+        -- Update recorder status
+        UPDATE AppUser
+        SET IsRecorder = p_IsRecorder
+        WHERE UserID = p_UserID;
+        
+        SET p_Success = TRUE;
+        IF p_IsRecorder = TRUE THEN
+            SET p_Message = 'Recorder privilege granted successfully';
+        ELSE
+            SET p_Message = 'Recorder privilege revoked successfully';
+        END IF;
+    END IF;
+END //
+DELIMITER ;
+
+-- ======================================================
 -- COMPLETED - ALL PROCEDURES AND INDEXES CREATED
 -- ======================================================

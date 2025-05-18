@@ -18,13 +18,8 @@ def initialize_auth_state():
 
 def login_user(username, password):
     try:
-        # Calculate password hash
-        password_pattern = f"aAa{username}$%"
-        password_hash = hashlib.sha256(password_pattern.encode()).hexdigest()
-        
-        # Check if the entered password matches the pattern
-        if password != password_pattern:
-            return False, "Invalid credentials. Please try again."
+        # Hash the provided password directly
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
         
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
@@ -53,6 +48,27 @@ def login_user(username, password):
             st.session_state.is_admin = user["IsAdmin"]
             return True, "Login successful"
         else:
+            # Try with the default pattern as fallback
+            default_pattern = f"aAa{username}$%"
+            default_hash = hashlib.sha256(default_pattern.encode()).hexdigest()
+            
+            if default_hash != password_hash:  # Only query again if hashes are different
+                # Try again with the default pattern
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(query, (username, default_hash))
+                user = cursor.fetchone()
+                cursor.close()
+                
+                if user:
+                    # Set session state variables
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user["UserID"]
+                    st.session_state.archer_id = user["ArcherID"]
+                    st.session_state.archer_name = user["ArcherName"]
+                    st.session_state.is_recorder = user["IsRecorder"]
+                    st.session_state.is_admin = user["IsAdmin"]
+                    return True, "Login successful"
+            
             return False, "Invalid credentials. Please try again."
             
     except Exception as err:
@@ -74,7 +90,7 @@ def login_page():
     with col1:
         st.write("## Login")
         st.write("Please enter your credentials to access the system.")
-        st.info("Username: Your Archer ID\nPassword: aAa + Your Archer ID + $%")
+        st.info("Username: Your Archer ID.\nPassword: aAa + Your Archer ID + $%")
         
         username = st.text_input("Username (Archer ID)")
         password = st.text_input("Password", type="password")
