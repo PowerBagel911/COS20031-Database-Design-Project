@@ -2,17 +2,47 @@ import streamlit as st
 import mysql.connector
 import pandas as pd
 from datetime import date
-from archery_app.database import get_connection, get_archers, get_rounds, get_equipment_types, get_competitions
+from archery_app.database import (
+    get_connection,
+    get_archers,
+    get_rounds,
+    get_equipment_types,
+    get_competitions,
+)
+
 
 def view_personal_scores():
     st.header("View Personal Scores")
 
     archers = get_archers()
+
+    # Allow all users to view scores of any archer
     archer_options = {
         f"{a['ArcherID']} - {a['ArcherName']}": a["ArcherID"] for a in archers
     }
 
-    selected_archer = st.selectbox("Select Archer", options=list(archer_options.keys()))
+    # For normal archers, preselect their own ID but allow changing
+    if not st.session_state.is_recorder and not st.session_state.is_admin:
+        # Find the option key for the current archer to preselect it
+        current_archer_key = next(
+            (
+                key
+                for key in archer_options.keys()
+                if str(st.session_state.archer_id) in key.split(" - ")[0]
+            ),
+            list(archer_options.keys())[0],  # fallback to first option if not found
+        )
+        st.info("You can view your scores or other archers' scores for comparison.")
+        selected_archer = st.selectbox(
+            "Select Archer",
+            options=list(archer_options.keys()),
+            index=list(archer_options.keys()).index(current_archer_key),
+        )
+    else:
+        selected_archer = st.selectbox(
+            "Select Archer", options=list(archer_options.keys())
+        )
+
     archer_id = archer_options[selected_archer]
 
     rounds = get_rounds()
@@ -58,16 +88,26 @@ def view_personal_scores():
         except mysql.connector.Error as err:
             st.error(f"Database error: {err}")
 
+
 def record_practice_score():
     st.header("Record Practice Score")
 
     archers = get_archers()
-    archer_options = {
-        f"{a['ArcherID']} - {a['ArcherName']}": a["ArcherID"] for a in archers
-    }
 
-    selected_archer = st.selectbox("Select Archer", options=list(archer_options.keys()))
-    archer_id = archer_options[selected_archer]
+    # Only allow selecting an archer if user is recorder or admin
+    if st.session_state.is_recorder or st.session_state.is_admin:
+        archer_options = {
+            f"{a['ArcherID']} - {a['ArcherName']}": a["ArcherID"] for a in archers
+        }
+        selected_archer = st.selectbox(
+            "Select Archer", options=list(archer_options.keys())
+        )
+        archer_id = archer_options[selected_archer]
+    else:
+        # For normal archers, only record their own scores
+        archer_id = st.session_state.archer_id
+        archer_name = st.session_state.archer_name
+        st.info(f"Recording score for: {archer_name}")
 
     rounds = get_rounds()
     round_options = {f"{r['RoundID']} - {r['RoundName']}": r["RoundID"] for r in rounds}
@@ -123,6 +163,7 @@ def record_practice_score():
         except mysql.connector.Error as err:
             st.error(f"Database error: {err}")
 
+
 def view_round_definitions():
     st.header("View Round Definitions")
 
@@ -158,6 +199,7 @@ def view_round_definitions():
 
         except mysql.connector.Error as err:
             st.error(f"Database error: {err}")
+
 
 def view_competition_results():
     st.header("View Competition Results")
