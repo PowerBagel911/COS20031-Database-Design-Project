@@ -4,7 +4,7 @@ import openai
 from dotenv import load_dotenv
 import mysql.connector
 import pandas as pd
-from .database import get_connection
+from .database import get_connection, verify_connection
 import sqlalchemy
 import re
 
@@ -124,6 +124,16 @@ def get_sqlalchemy_engine():
 # Execute SQL query with proper error handling
 def execute_sql_query(sql_query, archer_id=None):
     try:
+        # Verify connection is established before executing
+        if not verify_connection():
+            return pd.DataFrame(
+                [
+                    {
+                        "error": "Database connection not established. Please ensure you are connected to the Swinburne VPN."
+                    }
+                ]
+            )
+
         engine = get_sqlalchemy_engine()
         # For SELECT queries, return a DataFrame
         if sql_query.strip().upper().startswith("SELECT"):
@@ -207,6 +217,22 @@ def sql_chatbot():
     if not st.session_state.is_admin:
         st.error(
             "You don't have permission to access the SQL Assistant. Admin access required."
+        )
+        return
+
+    # Verify database connection is established
+    if not verify_connection():
+        st.error(
+            "Cannot use SQL Assistant because database connection is not established."
+        )
+        st.markdown(
+            """
+        Please ensure you are connected to:
+        - Swinburne network on campus, or
+        - Swinburne VPN if off-campus
+        
+        [Swinburne VPN Installation Guide](https://www.swinburne.edu.au/content/dam/media/docs/Swinburne_VPN_Installation_Guide_Personal_Devices.pdf)
+        """
         )
         return
 

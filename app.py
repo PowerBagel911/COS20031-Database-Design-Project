@@ -2,7 +2,11 @@ import streamlit as st
 from datetime import datetime, date
 
 # Import modules from the archery_app package
-from archery_app.database import initialize_connection
+from archery_app.database import (
+    initialize_connection,
+    display_connection_error,
+    verify_connection,
+)
 from archery_app.auth import initialize_auth_state, login_page, logout
 from archery_app.archer_pages import (
     view_personal_scores,
@@ -242,10 +246,13 @@ def main_page():
 
 # Main function
 if __name__ == "__main__":
-    if not st.session_state.connection_established:
-        st.error(
-            "Unable to connect to the database. Please check your connection parameters."
-        )
+    # Check if we need to initialize the connection
+    if "connection_established" not in st.session_state:
+        initialize_connection()
+
+    # Verify connection is active
+    if not verify_connection():
+        display_connection_error()
     else:
         if st.session_state.logged_in:
             main_page()
