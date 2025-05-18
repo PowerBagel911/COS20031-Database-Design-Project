@@ -17,6 +17,7 @@ from archery_app.recorder_pages import (
     generate_competition_results,
 )
 from archery_app.admin_pages import manage_users, manage_permissions, manage_account
+from archery_app.chatbot import sql_chatbot
 
 # Set page configuration
 st.set_page_config(
@@ -59,6 +60,11 @@ def home_dashboard():
             st.rerun()
         if st.button("ℹ️ Round Definitions", use_container_width=True):
             st.session_state.current_page = "View Round Definitions"
+            st.rerun()
+        if st.session_state.is_admin and st.button(
+            "🤖 SQL Assistant", use_container_width=True
+        ):
+            st.session_state.current_page = "SQL Assistant"
             st.rerun()
 
     # For recorders and admins, show recorder section
@@ -143,6 +149,10 @@ def main_page():
             ("🏆 Competition Results", "View Competition Results"),
         ]
 
+        # Add SQL Assistant only for admin users
+        if st.session_state.is_admin:
+            archer_options.append(("🤖 SQL Assistant", "SQL Assistant"))
+
         for label, page in archer_options:
             if st.sidebar.button(label, key=f"btn_{page}", use_container_width=True):
                 st.session_state.current_page = page
@@ -196,6 +206,8 @@ def main_page():
         view_round_definitions()
     elif st.session_state.current_page == "View Competition Results":
         view_competition_results()
+    elif st.session_state.current_page == "SQL Assistant":
+        sql_chatbot()
     elif st.session_state.current_page == "Manage Archers" and (
         st.session_state.is_recorder or st.session_state.is_admin
     ):
