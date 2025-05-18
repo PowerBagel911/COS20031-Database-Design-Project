@@ -1,18 +1,13 @@
-import os
 import streamlit as st
 import openai
-from dotenv import load_dotenv
 import mysql.connector
 import pandas as pd
 from .database import get_connection, verify_connection
 import sqlalchemy
 import re
 
-# Load environment variables
-load_dotenv()
-
 # Configure OpenAI with Deepseek R1 API
-openai.api_key = os.getenv("DEEPSEEK_API_KEY")
+openai.api_key = st.secrets["DEEPSEEK_API_KEY"]
 openai.base_url = "https://api.deepseek.com"  # Adjust if necessary for Deepseek
 
 
@@ -117,7 +112,7 @@ def get_system_prompt(user_info):
 # Create a SQLAlchemy engine for database connections
 def get_sqlalchemy_engine():
     return sqlalchemy.create_engine(
-        f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
+        f"mysql+pymysql://{st.secrets['DB_USER']}:{st.secrets['DB_PASSWORD']}@{st.secrets['DB_HOST']}/{st.secrets['DB_NAME']}"
     )
 
 

@@ -1,19 +1,16 @@
-import os
 import streamlit as st
 import mysql.connector
 import pandas as pd
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# No need to load .env - Streamlit will automatically load secrets.toml
 
 
 def get_connection():
     return mysql.connector.connect(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME"),
+        host=st.secrets["DB_HOST"],
+        user=st.secrets["DB_USER"],
+        password=st.secrets["DB_PASSWORD"],
+        database=st.secrets["DB_NAME"],
     )
 
 

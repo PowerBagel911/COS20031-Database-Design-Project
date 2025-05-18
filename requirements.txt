@@ -2,7 +2,6 @@ mysql-connector-python==9.3.0        # [1]
 streamlit==1.45.1                    # [2]
 pandas==2.2.3                       # [3]
 openai==1.79.0                      # [4]
-python-dotenv==1.1.0                # [5]
-SQLAlchemy==2.0.41                  # [6]
+SQLAlchemy==2.0.41                  # [5]
 PyMySQL                             # Latest on PyPI
-numpy==1.26.1
+numpy==2.2.6
