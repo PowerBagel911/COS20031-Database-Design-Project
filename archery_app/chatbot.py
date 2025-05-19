@@ -308,15 +308,6 @@ def sql_chatbot():  # Initialize session state variables if not present
     if "last_query_dataframe" not in st.session_state:
         st.session_state.last_query_dataframe = pd.DataFrame()
 
-    if "user_prompt_text" not in st.session_state:
-        st.session_state.user_prompt_text = ""
-
-    if "should_process_message" not in st.session_state:
-        st.session_state.should_process_message = False
-
-    if "message_to_process" not in st.session_state:
-        st.session_state.message_to_process = ""
-
     # Only allow admins to access this feature
     if not st.session_state.is_admin:
         st.error(
@@ -353,167 +344,130 @@ def sql_chatbot():  # Initialize session state variables if not present
         "role": "Admin",  # Since we already verified they're an admin
     }
 
-    # Process message if needed (after rerun)
-    if st.session_state.should_process_message:
-        final_prompt = st.session_state.message_to_process
-        st.session_state.should_process_message = False
-        st.session_state.message_to_process = ""
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
+            # Display query results if applicable
+            if (
+                message["role"] == "assistant"
+                and len(st.session_state.query_results) > 0
+            ):
+                message_index = st.session_state.messages.index(message)
+                query_index = message_index // 2
+
+                if query_index < len(st.session_state.query_results):
+                    query_data = st.session_state.query_results[query_index]
+                    if query_data.get("sql") and query_data.get("df") is not None:
+                        with st.expander("SQL Query Results"):
+                            st.code(query_data["sql"], language="sql")
+                            if not query_data["df"].empty:
+                                st.dataframe(query_data["df"], use_container_width=True)
+                            else:
+                                st.info("The query returned no results.")
+
+    # Chat input - uses chat_input() which floats at the bottom of the page
+    if prompt := st.chat_input("Ask a question about the database..."):
         # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": final_prompt})
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # Update the chat container to display the new message
-        with st.spinner("Generating Answer..."):
-            # Generate SQL from prompt with chat history and query results
-            result = generate_sql(
-                final_prompt,
-                user_info,
-                st.session_state.chat_history,
-                st.session_state.last_query_result,
-                st.session_state.all_query_results,
-            )
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-            # Save chat history for next turn
-            st.session_state.chat_history = result["chat"].history
+        # Display assistant response
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
 
-            # Clean up the response to remove permission check information and sql determination
-            explanation = result["explanation"]
-            # Remove permission check and SQL determination sections if present
-            explanation = re.sub(
-                r"(?i).*?permission check:.*?\n",
-                "",
-                explanation,
-                flags=re.MULTILINE,
-            )
-            explanation = re.sub(
-                r"(?i).*?requires SQL execution:.*?\n",
-                "",
-                explanation,
-                flags=re.MULTILINE,
-            )
+            with st.spinner("Generating Answer..."):
+                # Generate SQL from prompt with chat history and query results
+                result = generate_sql(
+                    prompt,
+                    user_info,
+                    st.session_state.chat_history,
+                    st.session_state.last_query_result,
+                    st.session_state.all_query_results,
+                )
 
-            # Add assistant response to message history
-            st.session_state.messages.append(
-                {"role": "assistant", "content": explanation}
-            )
+                # Save chat history for next turn
+                st.session_state.chat_history = result["chat"].history
 
-            # Store query result with this message
-            query_data = {"sql": None, "df": pd.DataFrame()}
+                # Clean up the response to remove permission check information and sql determination
+                explanation = result["explanation"]
+                # Remove permission check and SQL determination sections if present
+                explanation = re.sub(
+                    r"(?i).*?permission check:.*?\n",
+                    "",
+                    explanation,
+                    flags=re.MULTILINE,
+                )
+                explanation = re.sub(
+                    r"(?i).*?requires SQL execution:.*?\n",
+                    "",
+                    explanation,
+                    flags=re.MULTILINE,
+                )
 
-            # If permitted and SQL was extracted, execute it
-            if result["permission"] and result["sql"]:
-                with st.spinner("Executing query..."):
-                    query_result = execute_sql_query(result["sql"])
+                # Update assistant message in session state
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": explanation}
+                )
 
-                    # Save the executed query and result in query_data
-                    query_data["sql"] = result["sql"]
-                    query_data["df"] = query_result
+                # Show the response in the message placeholder
+                message_placeholder.markdown(explanation)
 
-                    # Save the executed query for context in next conversation
-                    st.session_state.last_executed_query = result["sql"]
+                # Store query result with this message
+                query_data = {"sql": None, "df": pd.DataFrame()}
 
-                    # Store query result for context in next conversation
-                    if not query_result.empty:
-                        # Convert DataFrame to a string representation
-                        result_string = query_result.to_string(index=False)
-                        # Save result for next query context
-                        st.session_state.last_query_result = result_string
-                        # Add to all query results
-                        st.session_state.all_query_results.append(result_string)
-                    else:
-                        message = "The query returned no results."
-                        st.session_state.last_query_result = message
-                        st.session_state.all_query_results.append(message)
+                # If permitted and SQL was extracted, execute it
+                if result["permission"] and result["sql"]:
+                    with st.spinner("Executing query..."):
+                        query_result = execute_sql_query(result["sql"])
 
-            # Add query data to query_results list
-            st.session_state.query_results.append(query_data)
+                        # Save the executed query and result in query_data
+                        query_data["sql"] = result["sql"]
+                        query_data["df"] = query_result
 
-    # Display chat history first
-    chat_container = st.container()
-    with chat_container:
-        if st.session_state.messages:
-            for i, message in enumerate(st.session_state.messages):
-                with st.chat_message(message["role"]):
-                    # Display the message content
-                    st.markdown(message["content"])
+                        # Save the executed query for context in next conversation
+                        st.session_state.last_executed_query = result["sql"]
 
-                    # Display query results if this message has associated results
-                    if (
-                        message["role"] == "assistant"
-                        and i // 2 < len(st.session_state.query_results)
-                        and st.session_state.query_results[i // 2]
-                    ):
-                        query_data = st.session_state.query_results[i // 2]
-                        if query_data.get("sql") and query_data.get("df") is not None:
-                            with st.expander("SQL Query Results"):
-                                st.code(query_data["sql"], language="sql")
-                                if not query_data["df"].empty:
-                                    st.dataframe(
-                                        query_data["df"], use_container_width=True
-                                    )
-                                else:
-                                    st.info("The query returned no results.")
+                        # Store query result for context in next conversation
+                        if not query_result.empty:
+                            # Convert DataFrame to a string representation
+                            result_string = query_result.to_string(index=False)
+                            # Save result for next query context
+                            st.session_state.last_query_result = result_string
+                            # Add to all query results
+                            st.session_state.all_query_results.append(result_string)
+                        else:
+                            message = "The query returned no results."
+                            st.session_state.last_query_result = message
+                            st.session_state.all_query_results.append(message)
 
-    # Function to clear input field
-    def clear_input():
-        st.session_state.user_prompt_text = ""
+                        # Display query results
+                        with st.expander("SQL Query Results"):
+                            st.code(query_data["sql"], language="sql")
+                            if not query_data["df"].empty:
+                                st.dataframe(query_data["df"], use_container_width=True)
+                            else:
+                                st.info("The query returned no results.")
 
-    # Function to submit message (set flags for processing after rerun)
-    def submit_message():
-        if st.session_state.user_prompt_text.strip():
-            # Queue message for processing after rerun
-            st.session_state.message_to_process = st.session_state.user_prompt_text
-            st.session_state.should_process_message = True
-            # Clear the input field
-            st.session_state.user_prompt_text = ""
+                # Add query data to query_results list
+                st.session_state.query_results.append(query_data)
 
-    # Function to clear the conversation
-    def clear_conversation():
-        st.session_state.chat_history = None
-        st.session_state.messages = []
-        st.session_state.last_query_result = None
-        st.session_state.all_query_results = []
-        st.session_state.query_results = []
-        st.session_state.last_executed_query = None
-        st.session_state.last_query_dataframe = pd.DataFrame()
-        st.session_state.user_prompt_text = ""
-        if "last_query_message" in st.session_state:
-            del st.session_state.last_query_message
-
-    # Create a visually distinct container for the chat input and buttons
-    with st.container(border=True):
-        # Chat input spanning full width
-        st.text_area(
-            "What would you like to know about the database?",
-            placeholder="e.g., Show me all archers who scored above 500 in the last month",
-            height=69,
-            key="user_prompt_text",
-            label_visibility="collapsed",
-        )
-
-        # Create two columns for the input buttons
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Send button will trigger the submit_message callback
-            send_button = st.button(
-                "Send ➡️", key="send", use_container_width=True, on_click=submit_message
-            )
-
-        with col2:
-            # Clear button will clear the text area
-            clear_button = st.button(
-                "❌ Clear Text",
-                key="clear_text",
-                use_container_width=True,
-                on_click=clear_input,
-            )
-
-    # Clear conversation button below the input container
+    # Clear conversation button centered below chat input
     if st.session_state.messages:
-        clear_conv_button = st.button(
-            "🗑️ Clear Conversation",
-            key="clear_chat",
-            use_container_width=True,
-            on_click=clear_conversation,
-        )
+        cols = st.columns([2, 1, 2])
+        with cols[1]:
+            if st.button("🗑️ Clear Conversation", use_container_width=True):
+                st.session_state.chat_history = None
+                st.session_state.messages = []
+                st.session_state.last_query_result = None
+                st.session_state.all_query_results = []
+                st.session_state.query_results = []
+                st.session_state.last_executed_query = None
+                st.session_state.last_query_dataframe = pd.DataFrame()
+                st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
