@@ -497,13 +497,13 @@ def sql_chatbot():  # Initialize session state variables if not present
         with col1:
             # Send button will trigger the submit_message callback
             send_button = st.button(
-                "Send →", key="send", use_container_width=True, on_click=submit_message
+                "Send ➡️", key="send", use_container_width=True, on_click=submit_message
             )
 
         with col2:
             # Clear button will clear the text area
             clear_button = st.button(
-                "Clear Text",
+                "❌ Clear Text",
                 key="clear_text",
                 use_container_width=True,
                 on_click=clear_input,
@@ -512,7 +512,7 @@ def sql_chatbot():  # Initialize session state variables if not present
     # Clear conversation button below the input container
     if st.session_state.messages:
         clear_conv_button = st.button(
-            "Clear Conversation",
+            "🗑️ Clear Conversation",
             key="clear_chat",
             use_container_width=True,
             on_click=clear_conversation,
