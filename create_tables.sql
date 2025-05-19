@@ -146,3 +146,28 @@ CREATE TABLE AppUser (
     IsAdmin BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (ArcherID) REFERENCES Archer(ArcherID)
 );
+
+CREATE TABLE SecurityLog (
+    LogID INT PRIMARY KEY AUTO_INCREMENT,
+    EventTime DATETIME NOT NULL,
+    UserID INT,
+    ArcherID INT,
+    IPAddress VARCHAR(45),
+    EventType VARCHAR(50) NOT NULL,
+    Description TEXT,
+    Severity VARCHAR(20) NOT NULL,
+    ActionURL VARCHAR(255),
+    RequestDetails TEXT,
+    IsReviewed BOOLEAN DEFAULT FALSE,
+    ReviewedBy INT,
+    ReviewedAt DATETIME,
+    FOREIGN KEY (UserID) REFERENCES AppUser(UserID),
+    FOREIGN KEY (ArcherID) REFERENCES Archer(ArcherID),
+    FOREIGN KEY (ReviewedBy) REFERENCES AppUser(UserID)
+);
+
+CREATE INDEX idx_securitylog_eventtime ON SecurityLog(EventTime);
+CREATE INDEX idx_securitylog_userid ON SecurityLog(UserID);
+CREATE INDEX idx_securitylog_eventtype ON SecurityLog(EventType);
+CREATE INDEX idx_securitylog_severity ON SecurityLog(Severity);
+CREATE INDEX idx_securitylog_isreviewed ON SecurityLog(IsReviewed);
