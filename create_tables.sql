@@ -166,8 +166,3 @@ CREATE TABLE SecurityLog (
     FOREIGN KEY (ReviewedBy) REFERENCES AppUser(UserID)
 );
 
-CREATE INDEX idx_securitylog_eventtime ON SecurityLog(EventTime);
-CREATE INDEX idx_securitylog_userid ON SecurityLog(UserID);
-CREATE INDEX idx_securitylog_eventtype ON SecurityLog(EventType);
-CREATE INDEX idx_securitylog_severity ON SecurityLog(Severity);
-CREATE INDEX idx_securitylog_isreviewed ON SecurityLog(IsReviewed);
