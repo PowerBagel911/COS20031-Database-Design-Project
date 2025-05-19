@@ -6,6 +6,8 @@ import sqlalchemy
 import re
 import google.generativeai as genai
 
+MODEL_NAME = "gemini-2.0-flash"
+
 # Configure Google Generative AI with Gemini 2.0 Flash
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
@@ -325,7 +327,7 @@ def generate_sql(
 
     try:
         # Set up the model
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(MODEL_NAME)
 
         # Create the prompt with system instructions and user query
         if chat_history is None:
