@@ -3,6 +3,8 @@ import hashlib
 from archery_app.database import get_connection
 import secrets  # For generating secure random salts
 
+from archery_app.validators import sanitize_input, validate_string, ValidationError
+
 def initialize_auth_state():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
@@ -26,6 +28,17 @@ def hash_password(password, salt):
 
 def login_user(username, password):
     try:
+        # Sanitize inputs to prevent SQL injection
+        username = sanitize_input(username)
+        
+        # Don't sanitize password before hashing
+        # but validate it's a reasonable input
+        try:
+            validate_string(username, "Username", min_length=1, max_length=50)
+            validate_string(password, "Password", min_length=1)
+        except ValidationError:
+            return False, "Invalid credentials. Please try again."
+            
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
