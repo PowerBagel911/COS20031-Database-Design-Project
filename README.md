@@ -68,7 +68,9 @@ Our application features a cutting-edge natural language SQL Assistant powered b
 
 ## 🎬 Demo Video
 
-<iframe src="https://www.youtube.com/embed/VfmzePjGVC8?si=wXqpxgv2gUPBcSQi" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+[![Archery Club Database Demo](https://img.youtube.com/vi/VfmzePjGVC8/maxresdefault.jpg)](https://www.youtube.com/watch?v=VfmzePjGVC8)
+
+*Click the image above to watch the full demo video*
 
 ## 💾 Installation
 
