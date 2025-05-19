@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime, date
 from archery_app.security_admin import security_logs_admin
+
 # Import modules from the archery_app package
 from archery_app.database import (
     initialize_connection,
@@ -65,11 +66,6 @@ def home_dashboard():
         if st.button("ℹ️ Round Definitions", use_container_width=True):
             st.session_state.current_page = "View Round Definitions"
             st.rerun()
-        if st.session_state.is_admin and st.button(
-            "🤖 SQL Assistant", use_container_width=True
-        ):
-            st.session_state.current_page = "SQL Assistant"
-            st.rerun()
 
     # For recorders and admins, show recorder section
     if st.session_state.is_recorder or st.session_state.is_admin:
@@ -93,25 +89,35 @@ def home_dashboard():
                 st.session_state.current_page = "Generate Competition Results"
                 st.rerun()
 
-    # Find the admin-only section in the sidebar and add Security Logs
-    # if st.session_state.is_admin:
-    #     st.sidebar.subheader("Administration")
+    # Add Admin section with SQL Assistant
+    if st.session_state.is_admin:
+        st.markdown("---")
+        st.subheader("Admin Tools")
 
-    #     admin_options = [
-    #         ("👤 User Management", "User Management"),
-    #         ("🔐 Permissions", "Permission Management"),
-    #         ("🔒 Security Logs", "Security Logs"),  # Add this line
-    #     ]
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(
+                "🤖 SQL Assistant", key="sql_assistant_home", use_container_width=True
+            ):
+                st.session_state.current_page = "SQL Assistant"
+                st.rerun()
+            if st.button(
+                "👤 User Management", key="user_mgmt_home", use_container_width=True
+            ):
+                st.session_state.current_page = "User Management"
+                st.rerun()
 
-    #     for label, page in admin_options:
-    #         if st.sidebar.button(
-    #             label, key=f"btn_{page}", use_container_width=True
-    #         ):
-    #             st.session_state.current_page = page
-    #             st.rerun()
+        with col2:
+            if st.button("🔐 Permissions", key="perms_home", use_container_width=True):
+                st.session_state.current_page = "Permission Management"
+                st.rerun()
+            if st.button(
+                "🔒 Security Logs", key="sec_logs_home", use_container_width=True
+            ):
+                st.session_state.current_page = "Security Logs"
+                st.rerun()
 
     # Add to the display_selected_page part - typically it's in the main_page function
-    
 
 
 # Main page to choose procedure
@@ -147,19 +153,13 @@ def main_page():
             st.rerun()
 
         # Separate menus with headers
-        st.sidebar.subheader("Archer Functions")
-
-        # Always available options
+        st.sidebar.subheader("Archer Functions")  # Always available options
         archer_options = [
             ("📊 View Scores", "View Personal Scores"),
             ("📝 Record Score", "Record Practice Score"),
             ("ℹ️ Round Info", "View Round Definitions"),
             ("🏆 Competition Results", "View Competition Results"),
         ]
-
-        # Add SQL Assistant only for admin users
-        if st.session_state.is_admin:
-            archer_options.append(("🤖 SQL Assistant", "SQL Assistant"))
 
         for label, page in archer_options:
             if st.sidebar.button(label, key=f"btn_{page}", use_container_width=True):
@@ -187,8 +187,8 @@ def main_page():
         # Admin-only options
         if st.session_state.is_admin:
             st.sidebar.subheader("Admin Functions")
-
             admin_options = [
+                ("🤖 SQL Assistant", "SQL Assistant"),
                 ("👤 User Management", "User Management"),
                 ("🔐 Permissions", "Permission Management"),
                 ("🔒 Security Logs", "Security Logs"),
@@ -200,7 +200,7 @@ def main_page():
                 ):
                     st.session_state.current_page = page
                     st.rerun()
-        
+
     # Main content title
     st.title("🏹 Archery Club Database")
 
@@ -243,7 +243,7 @@ def main_page():
     ):
         manage_permissions()
     elif st.session_state.current_page == "Security Logs" and st.session_state.is_admin:
-            security_logs_admin()
+        security_logs_admin()
     elif st.session_state.current_page == "Manage Account":
         manage_account()
     else:
