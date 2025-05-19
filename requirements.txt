@@ -1,3 +1,7 @@
-streamlit==1.22.0
-pandas==1.5.3
-requests==2.28.2
+mysql-connector-python==9.3.0        # [1]
+streamlit==1.45.1                    # [2]
+pandas==2.2.3                       # [3]
+google-generativeai>=0.3.2          # [4] For Gemini 2.0 Flash API
+SQLAlchemy==2.0.41                  # [5]
+PyMySQL                             # Latest on PyPI
+numpy==2.2.6

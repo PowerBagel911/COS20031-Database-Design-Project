@@ -1,0 +1,7 @@
+# .gitignore
+.env
+__pycache__
+secrets.toml
+*.pyc
+*.pyc
+/archery_app/__pycache__
