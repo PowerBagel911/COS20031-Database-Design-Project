@@ -10,6 +10,10 @@ from archery_app.database import (
     get_competitions,
 )
 
+from archery_app.validators import (
+    validate_integer, validate_date, sanitize_input, 
+    display_validation_errors, ValidationError
+)
 
 def view_personal_scores():
     st.header("View Personal Scores")
@@ -89,6 +93,11 @@ def view_personal_scores():
             st.error(f"Database error: {err}")
 
 
+from archery_app.validators import (
+    validate_integer, validate_date, sanitize_input, 
+    display_validation_errors, ValidationError
+)
+
 def record_practice_score():
     st.header("Record Practice Score")
 
@@ -130,12 +139,36 @@ def record_practice_score():
     total_score = st.number_input("Total Score", min_value=0, step=1)
 
     if st.button("Submit Score"):
+        # Validate and sanitize inputs
+        errors = []
+        
+        try:
+            # Validate archer_id
+            archer_id = validate_integer(archer_id, "Archer ID", min_value=1)
+            
+            # Validate round_id
+            round_id = validate_integer(round_id, "Round", min_value=1)
+            
+            # Validate equipment_id
+            equipment_id = validate_integer(equipment_id, "Equipment Type", min_value=1)
+            
+            # Validate score_date
+            score_date = validate_date(score_date, "Score Date", max_date=date.today())
+            
+            # Validate total_score
+            total_score = validate_integer(total_score, "Total Score", min_value=0)
+            
+        except ValidationError as e:
+            errors.append(str(e))
+        
+        # Display errors if any
+        if display_validation_errors(errors):
+            return
+            
+        # All inputs are valid, proceed with submission
         try:
             conn = get_connection()
             cursor = conn.cursor()
-
-            # Initialize the output parameter
-            output_params = cursor._connection.cursor()
 
             # Call the stored procedure
             cursor.callproc(

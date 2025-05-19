@@ -3,7 +3,10 @@ import mysql.connector
 import pandas as pd
 from datetime import date
 from archery_app.database import get_connection, get_archers, get_rounds, get_equipment_types, get_competitions, get_staged_scores, get_recorders
-
+from archery_app.validators import (
+    validate_integer, validate_string, validate_date, sanitize_input,
+    display_validation_errors, ValidationError
+)
 def manage_archers():
     st.header("Add New Archer")
 
@@ -26,10 +29,59 @@ def manage_archers():
     equipment_id = equipment_options[selected_equipment]
 
     if st.button("Add Archer"):
-        if not first_name or not last_name:
-            st.warning("Please fill in all required fields.")
+        # Validate and sanitize inputs
+        errors = []
+        
+        try:
+            # Validate first name - letters only, 2-50 chars
+            first_name = validate_string(
+                first_name, 
+                "First Name", 
+                min_length=2, 
+                max_length=50,
+                pattern=r'^[A-Za-z\s\-]+$',  # Letters, spaces, hyphens
+                pattern_description="First name should contain only letters, spaces, and hyphens."
+            )
+            
+            # Apply sanitization
+            first_name = sanitize_input(first_name)
+            
+            # Validate last name - letters only, 2-50 chars
+            last_name = validate_string(
+                last_name, 
+                "Last Name", 
+                min_length=2, 
+                max_length=50,
+                pattern=r'^[A-Za-z\s\-]+$',  # Letters, spaces, hyphens
+                pattern_description="Last name should contain only letters, spaces, and hyphens."
+            )
+            
+            # Apply sanitization
+            last_name = sanitize_input(last_name)
+            
+            # Validate date_of_birth
+            date_of_birth = validate_date(
+                date_of_birth, 
+                "Date of Birth", 
+                min_date=date(1900, 1, 1), 
+                max_date=date.today()
+            )
+            
+            # Validate gender
+            if gender not in ["M", "F"]:
+                raise ValidationError("Gender must be either 'M' or 'F'.")
+                
+            # Validate equipment_id
+            equipment_id = validate_integer(equipment_id, "Equipment Type", min_value=1)
+            
+        except ValidationError as e:
+            errors.append(str(e))
+        
+        # Display errors if any and return
+        if display_validation_errors(errors):
             return
-
+            
+        # If validation passes, proceed with archer creation
         try:
             conn = get_connection()
             cursor = conn.cursor()
@@ -105,6 +157,24 @@ def approve_practice_scores():
     recorder_id = recorder_options[selected_recorder]
 
     if st.button("Approve Score"):
+        # Validate inputs
+        errors = []
+        
+        try:
+            # Validate staged_score_id
+            staged_score_id = validate_integer(staged_score_id, "Score ID", min_value=1)
+            
+            # Validate recorder_id
+            recorder_id = validate_integer(recorder_id, "Recorder ID", min_value=1)
+                
+        except ValidationError as e:
+            errors.append(str(e))
+        
+        # Display errors if any and return
+        if display_validation_errors(errors):
+            return
+            
+        # If validation passes, proceed with approval
         try:
             conn = get_connection()
             cursor = conn.cursor()
@@ -145,10 +215,48 @@ def manage_competitions():
         description = st.text_area("Description")
 
         if st.button("Create Competition"):
-            if not competition_name:
-                st.warning("Please enter a competition name.")
+            # Validate and sanitize inputs
+            errors = []
+            
+            try:
+                # Validate competition_name
+                competition_name = validate_string(
+                    competition_name, 
+                    "Competition Name", 
+                    min_length=3, 
+                    max_length=100
+                )
+                
+                # Apply sanitization
+                competition_name = sanitize_input(competition_name)
+                
+                # Validate competition_date
+                competition_date = validate_date(
+                    competition_date, 
+                    "Competition Date", 
+                    min_date=date(2000, 1, 1)  # Assuming no competitions before 2000
+                )
+                
+                # Validate description
+                if description:
+                    description = validate_string(
+                        description, 
+                        "Description", 
+                        max_length=255,
+                        allow_none=True
+                    )
+                    
+                    # Apply sanitization
+                    description = sanitize_input(description)
+                
+            except ValidationError as e:
+                errors.append(str(e))
+            
+            # Display errors if any and return
+            if display_validation_errors(errors):
                 return
-
+                
+            # If validation passes, proceed with competition creation
             try:
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -245,6 +353,24 @@ def manage_competitions():
         score_id = score_options[selected_score]
 
         if st.button("Link Score"):
+            # Validate inputs
+            errors = []
+            
+            try:
+                # Validate competition_id
+                competition_id = validate_integer(competition_id, "Competition ID", min_value=1)
+                
+                # Validate score_id
+                score_id = validate_integer(score_id, "Score ID", min_value=1)
+                    
+            except ValidationError as e:
+                errors.append(str(e))
+            
+            # Display errors if any and return
+            if display_validation_errors(errors):
+                return
+                
+            # If validation passes, proceed with linking
             try:
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -282,6 +408,21 @@ def generate_competition_results():
     competition_id = competition_options[selected_competition]
 
     if st.button("Generate Results"):
+        # Validate input
+        errors = []
+        
+        try:
+            # Validate competition_id
+            competition_id = validate_integer(competition_id, "Competition ID", min_value=1)
+                
+        except ValidationError as e:
+            errors.append(str(e))
+        
+        # Display errors if any and return
+        if display_validation_errors(errors):
+            return
+            
+        # If validation passes, proceed with generating results
         try:
             conn = get_connection()
             cursor = conn.cursor(dictionary=True)
