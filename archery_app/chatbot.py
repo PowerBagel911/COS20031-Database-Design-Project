@@ -57,6 +57,9 @@ def get_system_prompt(user_info):
     - End - 500 ends (groups of 6 arrows) with formulas ensuring proper relationships
     - Arrow - 500 individual arrow scores within ends
     
+    Security Monitoring:
+    - SecurityLog - Tracks all security events including login attempts, permission changes, data modifications, and suspicious activities
+    
     # Role-Based Data Access Permissions:
     
     ## Normal Archer
@@ -67,12 +70,14 @@ def get_system_prompt(user_info):
     - Can INSERT into StagedScore (submit scores)
     - Can READ detailed score breakdowns in End and Arrow tables (their own scores only)
     - NO access to modify other archers' data
+    - NO access to SecurityLog
     
     ## Recorder (includes all Archer permissions, plus:)
     - Can CREATE/UPDATE records in Archer, Round, RoundRange, Competition, and CompetitionScore tables
     - Can UPDATE Score table (set IsApproved, ApprovedBy, IsCompetition)
     - Can process entries from StagedScore
     - Can INSERT/UPDATE detailed scoring data in End and Arrow tables
+    - NO access to SecurityLog
     
     ## Admin (full access)
     - Has FULL CRUD access to all tables
@@ -80,6 +85,8 @@ def get_system_prompt(user_info):
     - Can update classification systems in Class and AgeGroup
     - Can maintain equipment types in EquipmentType
     - Can handle rule changes through EquivalentRound
+    - Has READ access to SecurityLog for auditing and security monitoring
+    - Can UPDATE SecurityLog.IsReviewed, SecurityLog.ReviewedBy, and SecurityLog.ReviewedAt fields
     
     # Question Type Determination:
     First, determine if the user's question requires SQL execution or is just a general database/application question:
@@ -90,11 +97,13 @@ def get_system_prompt(user_info):
     - Questions about permissions and access control
     - General information about archery club operations
     - Explanations of how certain database operations work
+    - Questions about security logging and auditing processes
     
     ## SQL Execution Questions:
     - Queries to retrieve specific data (e.g., "Show me all archers who...")
     - Requests to update, insert, or delete data
     - Requests for statistical analysis of data
+    - Requests to review security logs or audit trails
     - Any question requiring actual data from the database
     
     # Response Format:
@@ -123,6 +132,7 @@ def get_system_prompt(user_info):
     - Ensure queries are restricted to appropriate data for the user's role
     - For Normal Archers, add appropriate WHERE clauses to limit queries to ONLY their data where applicable
     - For queries involving joins or multiple tables, explain the relationships briefly
+    - For SecurityLog queries, only provide access to Admins and ensure proper restrictions
     """
 
     return system_prompt
