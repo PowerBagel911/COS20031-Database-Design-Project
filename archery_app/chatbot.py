@@ -1,14 +1,13 @@
 import streamlit as st
-import openai
 import mysql.connector
 import pandas as pd
 from .database import get_connection, verify_connection
 import sqlalchemy
 import re
+import google.generativeai as genai
 
-# Configure OpenAI with Deepseek R1 API
-openai.api_key = st.secrets["DEEPSEEK_API_KEY"]
-openai.base_url = "https://api.deepseek.com"  # Adjust if necessary for Deepseek
+# Configure Google Generative AI with Gemini 2.0 Flash
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 
 # Load SQL schema from create_tables.sql
@@ -85,18 +84,16 @@ def get_system_prompt(user_info):
     # Response Format:
     1. Write your response in well-formatted markdown
     2. Begin with a permission check: State whether the user has permission for this operation based on their role
-    3. Provide a SQL explanation: Explain what the SQL query will do (when applicable)
+    3. Provide a detailed SQL explanation with bullet points: Explain what the SQL query will do (when applicable)
     4. Include SQL code in proper markdown code blocks using triple backticks with the 'sql' language specifier: ```sql
-    5. When providing SQL to execute, ALWAYS include a final code block with this exact format:
-    
-    ###Final code to execute###
-    ```sql
-    <YOUR SQL QUERY HERE>
-    ```
+    5. When providing SQL to execute, ALWAYS include a final code block with this heading 3 "Final code to execute:", followed by the SQL code in a code block
+    6. If the user does not have permission, provide a clear explanation of why
     
     IMPORTANT:
     - ALWAYS respond using markdown formatting for better readability
-    - Use headers (##, ###), bullet points, and other markdown formatting as appropriate
+    - Use headers (###), bullet points, and other markdown formatting as appropriate
+    - Only use heading 3 for sections.
+    - Provide clear and detailed explanations for SQL queries, especially for complex ones
     - Organize your response with clear sections
     - Use proper markdown code blocks with 'sql' language specifier for all SQL code
     - For executable SQL, provide a FINAL code block with the exact format shown above
@@ -172,18 +169,17 @@ def generate_sql(prompt, user_info):
     system_prompt = get_system_prompt(user_info)
 
     try:
-        response = openai.chat.completions.create(
-            model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.1,
-            max_tokens=2000,
-        )
+        # Set up the model
+        model = genai.GenerativeModel(
+            "gemini-2.0-flash"
+        )  # Change to the appropriate model
+
+        # Create the prompt with system instructions and user query
+        chat = model.start_chat(history=[])
+        response = chat.send_message(f"{system_prompt}\n\nUser Question: {prompt}")
 
         # Extract the response
-        assistant_response = response.choices[0].message.content
+        assistant_response = response.text
 
         # Check if permission denied
         if (
@@ -229,11 +225,9 @@ def sql_chatbot():
         [Swinburne VPN Installation Guide](https://www.swinburne.edu.au/content/dam/media/docs/Swinburne_VPN_Installation_Guide_Personal_Devices.pdf)
         """
         )
-        return
-
-    st.header("SQL Assistant (Admin Only)")
+        return st.header("SQL Assistant (Admin Only)")
     st.write(
-        "Ask questions about the database in natural language, and our SQL assistant will generate and execute the appropriate SQL query."
+        "Ask questions about the database in natural language, and our Gemini-powered SQL assistant will generate and execute the appropriate SQL query."
     )
 
     # Collect user information for context

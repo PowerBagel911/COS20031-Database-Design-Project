@@ -44,7 +44,7 @@ All recorder features, plus:
 - **Backend**: Python
 - **Database**: MySQL (MariaDB)
 - **Authentication**: Custom implementation with SHA-256 hashing
-- **AI Integration**: Deepseek API for SQL assistance
+- **AI Integration**: Google Gemini 2.0 Flash for SQL assistance
 
 ## Database Schema
 
@@ -63,15 +63,11 @@ The database includes tables for:
 
 - Python 3.10 or higher
 - MySQL/MariaDB database server
-- Access to Deepseek API (for SQL assistance feature)
+- Access to Google Gemini API (for SQL assistance feature)
 
 ### Installation Steps
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/archery-club-database.git
-   cd archery-club-database
-   ```
+1. Clone the repository.
 
 2. Install required dependencies:
    ```bash
@@ -79,27 +75,25 @@ The database includes tables for:
    ```
 
 3. Set up Streamlit secrets:
-   - Create a `.streamlit/secrets.toml` file with the following content:
-     ```toml
-     # Database Configuration
-     DB_HOST = "your-db-host"
-     DB_USER = "your-db-user"
-     DB_PASSWORD = "your-db-password"
-     DB_NAME = "your-db-name"
-
-     # API Keys
-     DEEPSEEK_API_KEY = "your-deepseek-api-key"
-     ```
-   - Replace the placeholder values with your actual credentials
-
-4. Initialize the database:
-   - Run the SQL scripts in a MySQL/MariaDB client:
+   - Create a `.streamlit` directory in the project root:
      ```bash
-     mysql -u yourusername -p yourdatabase < create_tables.sql
-     mysql -u yourusername -p yourdatabase < create_procedures.sql
+     mkdir .streamlit
+     ```
+   - Create a secrets.toml file with your configuration:
+     ```bash
+     echo # Database Configuration > .streamlit\secrets.toml
+     echo DB_HOST = "your-db-host" >> .streamlit\secrets.toml
+     echo DB_USER = "your-db-user" >> .streamlit\secrets.toml
+     echo DB_PASSWORD = "your-db-password" >> .streamlit\secrets.toml
+     echo DB_NAME = "your-db-name" >> .streamlit\secrets.toml
+     echo # AI API Keys >> .streamlit\secrets.toml
+     echo GEMINI_API_KEY = "your-gemini-api-key" >> .streamlit\secrets.toml
+     ```
+   - Edit `.streamlit/secrets.toml` and replace the placeholder values with your actual credentials
+     GEMINI_API_KEY = "your-gemini-api-key"
      ```
 
-5. Run the application:
+4. Run the application:
    ```bash
    streamlit run app.py
    ```
@@ -113,7 +107,7 @@ The database includes tables for:
 3. Add your secrets in the Streamlit Cloud dashboard:
    - Go to your app settings
    - Navigate to the "Secrets" section
-   - Add the same configuration from your local secrets.toml file:
+   - Add your configuration with actual values:
      ```toml
      # Database Configuration
      DB_HOST = "your-db-host"
@@ -121,9 +115,19 @@ The database includes tables for:
      DB_PASSWORD = "your-db-password"
      DB_NAME = "your-db-name"
 
-     # API Keys
-     DEEPSEEK_API_KEY = "your-deepseek-api-key"
+     # AI API Keys
+     GEMINI_API_KEY = "your-gemini-api-key"
      ```
+
+## Important Notes for Deployment
+
+When deploying to Streamlit Cloud, be aware that your app may need access to your university database. If your database is behind a VPN or firewall, you might need to:
+
+1. Request your university IT department to allowlist Streamlit Cloud's IP addresses
+2. Set up an SSH tunnel or proxy to access the database
+3. Consider using a public database for demonstration purposes
+
+For more details, see the `SECRETS_SETUP.md` file.
 
 ## Security Notes
 
