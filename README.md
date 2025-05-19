@@ -1,184 +1,169 @@
-# 🏹 Archery Club Database
+# 🏹 Archery Club Database Application
 
-A comprehensive database management system for archery clubs, featuring role-based access control, score tracking, competition management, and more.
+A comprehensive database management system for archery clubs to track archers, scores, competitions, and more. Built with Streamlit and MySQL, this application provides a user-friendly interface for club administration and archer performance tracking.
 
-## Overview
+## 📋 Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [System Architecture](#system-architecture)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Role-Based Access](#role-based-access)
+- [Database Schema](#database-schema)
+- [Security](#security)
+- [Development](#development)
+- [Contributors](#contributors)
 
-This Streamlit web application provides a user-friendly interface for archers, recorders, and administrators to manage various aspects of an archery club, including:
+## 🔍 Overview
 
-- **User Authentication**: Secure login with password hashing and salting
-- **Score Tracking**: Record and view practice scores
-- **Competition Management**: Create, manage, and generate results for competitions
-- **Member Management**: Add and manage archer profiles
-- **Role-Based Access**: Different functionality for archers, recorders, and administrators
-- **SQL Assistant**: AI-powered SQL query assistant for database exploration (admin only)
+The Archery Club Database Application is designed to streamline the management of archery club operations, including member management, score tracking, competition organization, and performance analysis. The system supports different user roles (Archers, Recorders, and Administrators) with appropriate access levels and features.
 
-## Features
+## ✨ Features
 
-### For All Users (Archers)
+### Archer Features
+- **View Personal Scores**: Track performance over time with detailed score history
+- **Record Practice Scores**: Submit practice scores for approval
+- **View Round Definitions**: Access information about different archery round types
+- **View Competition Results**: Check competition standings and personal performance
 
-- **View Personal Scores**: Track historical performance
-- **Record Practice Scores**: Submit scores for approval
-- **View Round Definitions**: Reference standard archery rounds
-- **View Competition Results**: See results from club competitions
-- **Account Management**: Update personal account settings
+### Recorder Features
+- **Manage Archers**: Add new archers, update archer information
+- **Approve Practice Scores**: Review and approve scores submitted by archers
+- **Manage Competitions**: Create and organize competitions
+- **Generate Competition Results**: Calculate and publish competition results
 
-### For Recorders
-
-All archer features, plus:
-- **Manage Archers**: Add and edit archer profiles
-- **Approve Practice Scores**: Validate submitted scores
-- **Manage Competitions**: Create and edit competitions
-- **Generate Competition Results**: Calculate and publish results
-
-### For Administrators
-
-All recorder features, plus:
+### Administrator Features
+- **SQL Assistant**: AI-powered database query tool using Google's Gemini 2.0 Flash API
 - **User Management**: Create and manage user accounts
-- **Permission Management**: Assign recorder/admin privileges
-- **SQL Assistant**: AI-powered SQL query interface
+- **Permission Management**: Control access rights for users
+- **Security Logs**: Monitor system activity and security events
+- **Account Management**: Update user information and password
 
-## Technical Stack
+## 🏗️ System Architecture
 
-- **Frontend**: Streamlit
-- **Backend**: Python
-- **Database**: MySQL (MariaDB)
-- **Authentication**: Custom implementation with SHA-256 hashing
-- **AI Integration**: Google Gemini 2.0 Flash for SQL assistance
+### Frontend
+- **Streamlit**: Web interface framework providing interactive dashboards and forms
+- **Pandas**: For data manipulation and display
 
-## Database Schema
+### Backend
+- **MySQL Database**: Stores all application data
+- **Stored Procedures**: Business logic for data operations
+- **Python Middleware**: Connects frontend to backend services
 
-The database includes tables for:
-- Users and authentication
-- Archers and their details
-- Equipment types
-- Age groups and classes
-- Rounds and distances
-- Practice scores
-- Competitions and results
+### Integration
+- **Google Generative AI (Gemini 2.0 Flash)**: Powers the SQL Assistant feature
 
-## Installation and Setup
+## 💾 Installation
 
 ### Prerequisites
+- Python 3.9 or higher
+- MySQL Server 8.0 or higher
+- Swinburne VPN access (for database connectivity)
 
-- Python 3.10 or higher
-- MySQL/MariaDB database server
-- Access to Google Gemini API (for SQL assistance feature)
+### Setup Steps
 
-### Installation Steps
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd COS20031-Database-Design-Project
+   ```
 
-1. Clone the repository.
-
-2. Install required dependencies:
+2. **Install required packages**:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. Set up Streamlit secrets:
-   - Create a `.streamlit` directory in the project root:
-     ```bash
-     mkdir .streamlit
-     ```
-   - Create a secrets.toml file with your configuration:
-     ```bash
-     echo # Database Configuration > .streamlit\secrets.toml
-     echo DB_HOST = "your-db-host" >> .streamlit\secrets.toml
-     echo DB_USER = "your-db-user" >> .streamlit\secrets.toml
-     echo DB_PASSWORD = "your-db-password" >> .streamlit\secrets.toml
-     echo DB_NAME = "your-db-name" >> .streamlit\secrets.toml
-     echo # AI API Keys >> .streamlit\secrets.toml
-     echo GEMINI_API_KEY = "your-gemini-api-key" >> .streamlit\secrets.toml
-     ```
-   - Edit `.streamlit/secrets.toml` and replace the placeholder values with your actual credentials
-     GEMINI_API_KEY = "your-gemini-api-key"
-     ```
+3. **Set up database**:
+   - Run `create_tables.sql` to create the database schema
+   - Run `create_procedures.sql` to create the stored procedures and indexes
 
-4. Run the application:
+4. **Create a Streamlit secrets file** (`secrets.toml` in the `.streamlit` folder):
+   ```toml
+   [DEFAULT]
+   DB_HOST = "your-db-host"
+   DB_USER = "your-db-user"
+   DB_PASSWORD = "your-db-password"
+   DB_NAME = "your-db-name"
+   GEMINI_API_KEY = "your-gemini-api-key"
+   ```
+
+5. **Run the application**:
    ```bash
    streamlit run app.py
    ```
 
-## Deploying to Streamlit Cloud
+## 🚀 Usage
 
-1. Push your code to GitHub (without the secrets.toml file, which is in .gitignore)
+1. **Login**: Access the system with your username and password
+2. **Dashboard**: Navigate through the main dashboard to access various features
+3. **Menu**: Use the sidebar menu to switch between different functionalities
+4. **Logout**: End your session securely
 
-2. Create a new app in Streamlit Cloud pointing to your repository
+## 👥 Role-Based Access
 
-3. Add your secrets in the Streamlit Cloud dashboard:
-   - Go to your app settings
-   - Navigate to the "Secrets" section
-   - Add your configuration with actual values:
-     ```toml
-     # Database Configuration
-     DB_HOST = "your-db-host"
-     DB_USER = "your-db-user"
-     DB_PASSWORD = "your-db-password"
-     DB_NAME = "your-db-name"
+The application implements three distinct user roles:
 
-     # AI API Keys
-     GEMINI_API_KEY = "your-gemini-api-key"
-     ```
+- **Archers**: Regular club members who can view and record scores
+- **Recorders**: Club officials who can manage archers, approve scores, and organize competitions
+- **Administrators**: System administrators with full access to all features including security monitoring and database management
 
-## Important Notes for Deployment
+## 📊 Database Schema
 
-When deploying to Streamlit Cloud, be aware that your app may need access to your university database. If your database is behind a VPN or firewall, you might need to:
+The database includes tables for:
 
-1. Request your university IT department to allowlist Streamlit Cloud's IP addresses
-2. Set up an SSH tunnel or proxy to access the database
-3. Consider using a public database for demonstration purposes
+- User accounts and authentication
+- Archer profiles and equipment types
+- Competition definitions and results
+- Score tracking and approval
+- Round types and specifications
+- Security logging and auditing
 
-For more details, see the `SECRETS_SETUP.md` file.
+## 🔒 Security
 
-## Security Notes
+The application implements various security measures:
 
-- Passwords are stored with salted SHA-256 hashing
-- Connection strings and API keys are stored in Streamlit secrets
-- Role-based permissions prevent unauthorized access to features
-- SQL Assistant has safeguards against destructive operations
+- **Salted password hashing**: Secure storage of user credentials
+- **Input validation**: Protection against invalid data and injection attacks
+- **Security logging**: Comprehensive audit trail of system activities
+- **Role-based access control**: Ensures users only access authorized features
+- **SQL query inspection**: Prevention of dangerous database operations
 
-## Usage Guide
+## 💻 Development
 
-### First-Time Setup
+### Project Structure
 
-1. An administrator should:
-   - Create initial user accounts for club members
-   - Set up equipment types, rounds, and other reference data
-   - Assign recorder privileges to designated users
+```
+app.py                  # Main application entry point
+create_procedures.sql   # Database stored procedures
+create_tables.sql       # Database schema definitions
+requirements.txt        # Python dependencies
+archery_app/
+  ├── __init__.py       # Package initialization
+  ├── admin_pages.py    # Admin-specific features
+  ├── archer_pages.py   # Archer-specific features
+  ├── auth.py           # Authentication system
+  ├── chatbot.py        # SQL Assistant feature
+  ├── database.py       # Database connectivity
+  ├── recorder_pages.py # Recorder-specific features
+  ├── security_admin.py # Security administration
+  ├── security_logging.py # Security event logging
+  └── validators.py     # Input validation functions
+```
 
-2. Recorders can then:
-   - Add archer profiles for club members
-   - Set up competitions
-   - Approve practice scores
+### Technologies Used
 
-3. All archers can:
-   - Log in and view their personal dashboard
-   - Record practice scores
-   - View competition results
+- **Python**: Main programming language
+- **Streamlit**: Web application framework
+- **MySQL Connector**: Database connectivity
+- **SQLAlchemy**: ORM for database operations
+- **Pandas**: Data manipulation and display
+- **Google Generative AI**: AI chat assistance
 
-### Typical Workflows
+## 👨‍💻 Contributors
 
-**Recording Practice Scores:**
-1. Archer logs in and navigates to "Record Score"
-2. Enters score details and submits
-3. Recorder reviews and approves the score
-4. Score appears in archer's performance history
+- COS20031 Database Design Project Team
+- Swinburne University of Technology
 
-**Setting Up Competitions:**
-1. Recorder creates a new competition with dates and rounds
-2. System automatically determines eligible archers
-3. After the competition, recorder generates results
-4. Results are published for all users to view
+---
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Streamlit for the web framework
-- MySQL/MariaDB for the database engine
-- Deepseek for AI assistance capabilities
+© 2025 Archery Club Database Project | Swinburne University of Technology
