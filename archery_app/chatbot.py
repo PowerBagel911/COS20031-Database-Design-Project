@@ -88,6 +88,17 @@ def get_system_prompt(user_info):
     - Has READ access to SecurityLog for auditing and security monitoring
     - Can UPDATE SecurityLog.IsReviewed, SecurityLog.ReviewedBy, and SecurityLog.ReviewedAt fields
     
+    # Dangerous Query Detection:
+    Always evaluate if a query is potentially dangerous before providing executable code. A query is considered dangerous if it:
+    - Deletes or drops tables without proper safeguards
+    - Truncates tables
+    - Performs mass updates without WHERE clauses
+    - Alters database schema in a destructive way
+    - Deletes multiple records without specific filtering
+    - Modifies system tables or critical application data
+    - Contains commands like DROP DATABASE, DROP TABLE, TRUNCATE TABLE without proper safeguards
+    - Contains DELETE or UPDATE statements without WHERE clauses
+    
     # Question Type Determination:
     First, determine if the user's question requires SQL execution or is just a general database/application question:
     
@@ -115,10 +126,12 @@ def get_system_prompt(user_info):
     
     For questions that require SQL execution:
     1. Begin with a permission check: State whether the user has permission for this operation based on their role
-    2. Provide a detailed SQL explanation with bullet points: Explain what the SQL query will do
-    3. Include SQL code in proper markdown code blocks using triple backticks with the 'sql' language specifier: ```sql
-    4. When providing SQL to execute, ALWAYS include a final code block with this heading 3 "Final code to execute:", followed by the SQL code in a code block
-    5. If the user does not have permission, provide a clear explanation of why
+    2. Check if the query is potentially dangerous using the criteria above
+    3. Provide a detailed SQL explanation with bullet points: Explain what the SQL query will do
+    4. Include SQL code in proper markdown code blocks using triple backticks with the 'sql' language specifier: ```sql
+    5. For NON-dangerous queries, include a final code block with this heading 3 "Final code to execute:", followed by the SQL code in a code block
+    6. For DANGEROUS queries, include a heading "⚠️ DANGEROUS QUERY WARNING" and explain the risks. Do NOT include the "Final code to execute:" heading for these queries
+    7. If the user does not have permission, provide a clear explanation of why
     
     IMPORTANT:
     - ALWAYS respond using markdown formatting for better readability
@@ -127,12 +140,24 @@ def get_system_prompt(user_info):
     - For SQL execution questions, provide clear and detailed explanations for SQL queries
     - Organize your response with clear sections
     - Use proper markdown code blocks with 'sql' language specifier for all SQL code
-    - For executable SQL, provide a FINAL code block with the exact format shown above
+    - For executable SAFE SQL, provide a FINAL code block with the exact format shown above
+    - For DANGEROUS SQL, provide example code but DO NOT include the "Final code to execute:" heading
     - Do not execute operations that violate the permission rules
     - Ensure queries are restricted to appropriate data for the user's role
     - For Normal Archers, add appropriate WHERE clauses to limit queries to ONLY their data where applicable
     - For queries involving joins or multiple tables, explain the relationships briefly
     - For SecurityLog queries, only provide access to Admins and ensure proper restrictions
+    
+    # Dangerous Query Detection:
+    Always evaluate if a query is potentially dangerous before providing executable code. A query is considered dangerous if it:
+    - Deletes or drops tables without proper safeguards
+    - Truncates tables
+    - Performs mass updates without WHERE clauses
+    - Alters database schema in a destructive way
+    - Deletes multiple records without specific filtering
+    - Modifies system tables or critical application data
+    - Contains commands like DROP DATABASE, DROP TABLE, TRUNCATE TABLE without proper safeguards
+    - Contains DELETE or UPDATE statements without WHERE clauses
     """
 
     return system_prompt
@@ -175,8 +200,104 @@ def execute_sql_query(sql_query, archer_id=None):
         return pd.DataFrame([{"error": f"Error: {str(e)}"}])
 
 
+# Function to detect dangerous SQL queries
+def is_dangerous_query(sql_query, ai_response=""):
+    """
+    Checks if a SQL query is potentially dangerous.
+    Returns a tuple (is_dangerous, reason) where:
+    - is_dangerous: boolean indicating if the query is dangerous
+    - reason: explanation of why the query is dangerous, if applicable
+
+    Parameters:
+    - sql_query: The SQL query to check
+    - ai_response: The full response from the AI, which may contain warnings
+    """
+    if not sql_query:
+        return False, ""
+
+    sql_upper = sql_query.upper()
+
+    # First check if the AI itself flagged the query as dangerous
+    ai_danger_markers = [
+        "⚠️ DANGEROUS QUERY WARNING",
+        "DANGEROUS QUERY",
+        "query is potentially dangerous",
+        "potentially harmful",
+        "could be destructive",
+        "without proper safeguards",
+        "without a WHERE clause",
+        "⚠️",
+    ]
+
+    # Look for danger markers in the AI response
+    for marker in ai_danger_markers:
+        if marker.lower() in ai_response.lower():
+            # Extract the context around the danger marker
+            pattern = r"(?i).*?(" + re.escape(marker) + r".*?)(?:\n\n|\Z)"
+            match = re.search(pattern, ai_response, re.DOTALL)
+            reason = (
+                match.group(1).strip()
+                if match
+                else f"AI identified as dangerous: {marker}"
+            )
+            return True, reason
+
+    # Check for dangerous commands without proper safeguards
+    danger_patterns = [
+        (r"DROP\s+DATABASE", "Attempting to drop a database"),
+        (r"DROP\s+TABLE", "Attempting to drop a table"),
+        (r"TRUNCATE\s+TABLE", "Attempting to truncate a table"),
+        (
+            r"DELETE\s+FROM\s+\w+\s*(?!\s*WHERE)",
+            "DELETE statement without WHERE clause",
+        ),
+        (
+            r"UPDATE\s+\w+\s+SET\s+(?:\w+\s*=\s*[^,]+)(?:\s*,\s*\w+\s*=\s*[^,]+)*\s*(?!\s*WHERE)",
+            "UPDATE statement without WHERE clause",
+        ),
+        (r"ALTER\s+TABLE\s+\w+\s+DROP", "Attempting to drop a column"),
+        (r"DELETE\s+FROM", "DELETE operation detected"),
+        (r"UPDATE\s+\w+\s+SET", "UPDATE operation detected"),
+        (r"CREATE\s+USER", "Attempting to create a database user"),
+        (r"GRANT\s+", "Attempting to grant permissions"),
+        (r"REVOKE\s+", "Attempting to revoke permissions"),
+    ]
+
+    # Check each pattern
+    for pattern, reason in danger_patterns:
+        if re.search(pattern, sql_upper):
+            # For DELETE and UPDATE, only flag if there's no WHERE clause
+            if "DELETE" in pattern or "UPDATE" in pattern:
+                if "WHERE" not in reason and "WHERE" in sql_upper:
+                    continue
+            return True, reason
+
+    return False, ""
+
+
 # Extract the final executable SQL code from the response
 def extract_final_sql(text):
+    # Check if there are any danger warnings in the text first
+    danger_markers = [
+        "⚠️ DANGEROUS QUERY WARNING",
+        "DANGEROUS QUERY",
+        "query is potentially dangerous",
+        "without proper safeguards",
+        "without a WHERE clause",
+    ]
+
+    for marker in danger_markers:
+        if marker.lower() in text.lower():
+            # If text contains danger markers, look for a code block AFTER the Final code heading
+            # If not found, don't extract any SQL
+            standard_match = re.search(
+                r"###Final code to execute###\s*```(?:sql)?\s*(.*?)\s*```",
+                text,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if not standard_match:
+                return None
+
     # Look for the standardized format first
     standard_pattern = r"###Final code to execute###\s*```(?:sql)?\s*(.*?)\s*```"
     standard_match = re.search(standard_pattern, text, re.DOTALL | re.IGNORECASE)
@@ -184,7 +305,7 @@ def extract_final_sql(text):
     if standard_match:
         return standard_match.group(1).strip()
 
-    # Fallback to looking for any code blocks
+    # Fallback to looking for any code blocks if no danger markers were found
     code_blocks = re.findall(
         r"```(?:sql)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE
     )
@@ -265,8 +386,32 @@ def generate_sql(
                 "chat": chat,
             }
 
+        # Check if the AI flagged the query as dangerous
+        danger_markers = [
+            "⚠️ DANGEROUS QUERY WARNING",
+            "DANGEROUS QUERY",
+            "query is potentially dangerous",
+            "without proper safeguards",
+            "without a WHERE clause",
+        ]
+
+        is_dangerous = any(
+            marker.lower() in assistant_response.lower() for marker in danger_markers
+        )
+
         # Extract the final SQL query to execute (last code block)
         final_sql = extract_final_sql(assistant_response)
+
+        # If dangerous markers were detected but a SQL block was still found,
+        # don't set permission to True - this adds an extra safety layer
+        if is_dangerous and final_sql:
+            return {
+                "permission": False,
+                "sql": final_sql,  # Still include the SQL for informational purposes
+                "explanation": assistant_response,
+                "chat": chat,
+                "is_dangerous": True,  # Add flag to indicate it was marked dangerous
+            }
 
         return {
             "permission": True if final_sql else False,
@@ -420,42 +565,125 @@ def sql_chatbot():  # Initialize session state variables if not present
                 # Store query result with this message
                 query_data = {"sql": None, "df": pd.DataFrame()}
 
-                # If permitted and SQL was extracted, execute it
-                if result["permission"] and result["sql"]:
-                    with st.spinner("Executing query..."):
-                        query_result = execute_sql_query(result["sql"])
+                # Handle the case when the AI detected a dangerous query
+                if result.get("is_dangerous", False) and result.get("sql"):
+                    # Log that we detected a dangerous query from the AI
+                    query_data["sql"] = result["sql"]
+                    danger_reason = "AI detected a dangerous query"
+                    query_data["df"] = pd.DataFrame(
+                        [
+                            {
+                                "warning": f"⚠️ DANGEROUS QUERY DETECTED: {danger_reason}. Query not executed for safety."
+                            }
+                        ]
+                    )
 
-                        # Save the executed query and result in query_data
+                    # Add warning to the explanation
+                    message_placeholder.markdown(
+                        explanation
+                        + f"\n\n⚠️ **DANGEROUS QUERY DETECTED**: {danger_reason}. Query not executed for safety."
+                    )
+
+                    # Save for next conversation context
+                    warning_message = f"⚠️ DANGEROUS QUERY DETECTED: {danger_reason}. Query not executed for safety."
+                    st.session_state.last_query_result = warning_message
+                    st.session_state.all_query_results.append(warning_message)
+                    st.session_state.last_executed_query = result["sql"]
+
+                    # Display query results
+                    with st.expander("SQL Query Results"):
+                        st.code(query_data["sql"], language="sql")
+                        st.warning(warning_message)
+
+                # If permitted and SQL was extracted, check if it's dangerous and execute if safe
+                # Also check the 'is_dangerous' flag that may have been set during generation
+                if (
+                    result.get("permission", False) and result.get("sql")
+                ) and not result.get("is_dangerous", False):
+                    with st.spinner("Checking and executing query..."):
+                        # Double-check if the query is dangerous, also passing the AI's explanation
+                        is_dangerous, danger_reason = is_dangerous_query(
+                            result["sql"], result["explanation"]
+                        )
+
+                        # Save the SQL in query_data regardless of execution
                         query_data["sql"] = result["sql"]
+
+                        if is_dangerous:
+                            # Create a warning DataFrame for dangerous queries
+                            query_result = pd.DataFrame(
+                                [
+                                    {
+                                        "warning": f"⚠️ DANGEROUS QUERY DETECTED: {danger_reason}. Query not executed for safety."
+                                    }
+                                ]
+                            )
+                            # Add warning to the explanation
+                            message_placeholder.markdown(
+                                explanation
+                                + f"\n\n⚠️ **DANGEROUS QUERY DETECTED**: {danger_reason}. Query not executed for safety."
+                            )
+                        else:
+                            # Execute safe query
+                            query_result = execute_sql_query(result["sql"])
+
+                        # Save the result in query_data
                         query_data["df"] = query_result
 
                         # Save the executed query for context in next conversation
                         st.session_state.last_executed_query = result["sql"]
 
                         # Store query result for context in next conversation
-                        if not query_result.empty:
-                            # Convert DataFrame to a string representation
-                            result_string = query_result.to_string(index=False)
-                            # Save result for next query context
-                            st.session_state.last_query_result = result_string
-                            # Add to all query results
-                            st.session_state.all_query_results.append(result_string)
+                        if isinstance(query_result, pd.DataFrame):
+                            if "warning" in query_result.columns:
+                                # It's a dangerous query result
+                                warning_message = query_result["warning"].iloc[0]
+                                st.session_state.last_query_result = warning_message
+                                st.session_state.all_query_results.append(
+                                    warning_message
+                                )
+                            elif "error" in query_result.columns:
+                                # It's an error result
+                                error_message = query_result["error"].iloc[0]
+                                st.session_state.last_query_result = error_message
+                                st.session_state.all_query_results.append(error_message)
+                            elif not query_result.empty:
+                                # It's a normal result with data
+                                result_string = query_result.to_string(index=False)
+                                st.session_state.last_query_result = result_string
+                                st.session_state.all_query_results.append(result_string)
+                            else:
+                                # Empty result
+                                message = "The query returned no results."
+                                st.session_state.last_query_result = message
+                                st.session_state.all_query_results.append(message)
                         else:
-                            message = "The query returned no results."
+                            # Handle unexpected result type
+                            message = "Unexpected result format."
                             st.session_state.last_query_result = message
                             st.session_state.all_query_results.append(message)
 
                         # Display query results
                         with st.expander("SQL Query Results"):
                             st.code(query_data["sql"], language="sql")
-                            if not query_data["df"].empty:
-                                st.dataframe(query_data["df"], use_container_width=True)
+                            if isinstance(query_data["df"], pd.DataFrame):
+                                if "warning" in query_data["df"].columns:
+                                    st.warning(query_data["df"]["warning"].iloc[0])
+                                elif "error" in query_data["df"].columns:
+                                    st.error(query_data["df"]["error"].iloc[0])
+                                elif not query_data["df"].empty:
+                                    st.dataframe(
+                                        query_data["df"], use_container_width=True
+                                    )
+                                else:
+                                    st.info("The query returned no results.")
                             else:
-                                st.info("The query returned no results.")
+                                st.error("Unexpected result format.")
 
                 # Add query data to query_results list
                 st.session_state.query_results.append(query_data)
 
+    st.markdown("<br>", unsafe_allow_html=True)
     # Clear conversation button centered below chat input
     if st.session_state.messages:
         cols = st.columns([2, 1, 2])
@@ -469,5 +697,3 @@ def sql_chatbot():  # Initialize session state variables if not present
                 st.session_state.last_executed_query = None
                 st.session_state.last_query_dataframe = pd.DataFrame()
                 st.rerun()
-
-    st.markdown("<br>", unsafe_allow_html=True)
