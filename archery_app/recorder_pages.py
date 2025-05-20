@@ -7,6 +7,7 @@ from archery_app.validators import (
     validate_integer, validate_string, validate_date, sanitize_input,
     display_validation_errors, ValidationError
 )
+from archery_app.security_logging import log_security_event, SecurityEventType
 def manage_archers():
     st.header("Add New Archer")
 
@@ -110,6 +111,13 @@ def manage_archers():
 
             if archer_id:
                 st.success(f"Archer added successfully! Archer ID: {archer_id}")
+                # Add logging
+                from archery_app.security_logging import log_security_event, SecurityEventType
+                log_security_event(
+                    event_type=SecurityEventType.ARCHER_CREATE,
+                    description=f"New archer created: {first_name} {last_name} (ID: {archer_id})",
+                    user_id=st.session_state.user_id
+                )
                 if archer_class:
                     st.info(f"Archer's Class: {archer_class}")
             else:
@@ -194,6 +202,14 @@ def approve_practice_scores():
 
             if score_id > 0:
                 st.success(f"Score approved successfully! Score ID: {score_id}")
+                # Add logging
+                from archery_app.security_logging import log_security_event, SecurityEventType
+                log_security_event(
+                    event_type=SecurityEventType.SCORE_APPROVE,
+                    description=f"Score approved: Staged Score ID {staged_score_id} → Score ID {score_id}",
+                    user_id=st.session_state.user_id,
+                    archer_id=recorder_id
+                )
             else:
                 st.error(
                     "Failed to approve score. The selected user does not have recorder privileges."
@@ -286,6 +302,13 @@ def manage_competitions():
                 if competition_id:
                     st.success(
                         f"Competition created successfully! Competition ID: {competition_id}"
+                    )
+                    # Add logging
+                    from archery_app.security_logging import log_security_event, SecurityEventType
+                    log_security_event(
+                        event_type=SecurityEventType.COMPETITION_CREATE,
+                        description=f"New competition created: {competition_name} (ID: {competition_id})",
+                        user_id=st.session_state.user_id
                     )
                 else:
                     st.warning("Competition was created but couldn't retrieve the ID.")
@@ -385,7 +408,13 @@ def manage_competitions():
                 conn.close()
 
                 st.success(f"Score linked to competition successfully!")
-
+                # Add logging
+                from archery_app.security_logging import log_security_event, SecurityEventType
+                log_security_event(
+                    event_type=SecurityEventType.COMPETITION_UPDATE,
+                    description=f"Score ID {score_id} linked to Competition ID {competition_id}",
+                    user_id=st.session_state.user_id
+                )
             except mysql.connector.Error as err:
                 st.error(f"Database error: {err}")
 

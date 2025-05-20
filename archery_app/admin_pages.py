@@ -5,7 +5,7 @@ from datetime import date, datetime
 import hashlib
 from archery_app.database import get_connection
 from archery_app.auth import generate_salt, hash_password
-
+from archery_app.security_logging import log_security_event, SecurityEventType
 def get_all_users():
     """Retrieve all users from the database"""
     try:
@@ -154,6 +154,14 @@ def manage_users():
 
                 if result_id > 0:
                     st.success(f"{message} (User ID: {result_id})")
+                    # Add logging
+                    from archery_app.security_logging import log_security_event, SecurityEventType
+                    log_security_event(
+                        event_type=SecurityEventType.USER_ACCOUNT_CREATE,
+                        description=f"New user account created for archer {archer_id} with username '{username}'",
+                        user_id=st.session_state.user_id,
+                        archer_id=archer_id
+                    )
                 else:
                     st.error(message)
 
@@ -199,6 +207,8 @@ def manage_users():
                         st.error("Passwords do not match.")
                     else:
                         try:
+                            # Get selected user's information before password change
+                            selected_user_info = [u for u in users if u["UserID"] == user_id][0]
                             conn = get_connection()
                             cursor = conn.cursor()
 
@@ -229,6 +239,14 @@ def manage_users():
 
                             if result_id > 0:
                                 st.success(f"{message}")
+                                # Add logging
+                                from archery_app.security_logging import log_security_event, SecurityEventType
+                                log_security_event(
+                                    event_type=SecurityEventType.AUTH_PASSWORD_CHANGE,
+                                    description=f"Password changed for user ID {user_id}",
+                                    user_id=st.session_state.user_id,
+                                    archer_id=selected_user_info["ArcherID"]
+                                )
                             else:
                                 st.error(message)
 
@@ -276,6 +294,14 @@ def manage_users():
                         if result_id > 0:
                             st.success(f"{message}")
                             st.info(f"New password is: {default_password}")
+                            # Add logging
+                            from archery_app.security_logging import log_security_event, SecurityEventType
+                            log_security_event(
+                                event_type=SecurityEventType.AUTH_PASSWORD_CHANGE,
+                                description=f"Password reset to default for user ID {user_id}",
+                                user_id=st.session_state.user_id,
+                                archer_id=selected_user_info["ArcherID"]
+                            )
                         else:
                             st.error(message)
 
@@ -288,6 +314,8 @@ def manage_users():
 
             if st.button("Delete User Account", disabled=not confirm_delete):
                 try:
+                    # Get selected user's information before deletion
+                    selected_user_info = [u for u in users if u["UserID"] == user_id][0]
                     conn = get_connection()
                     cursor = conn.cursor()
 
@@ -308,6 +336,14 @@ def manage_users():
 
                     if result_id > 0:
                         st.success(f"{message}")
+                        # Add logging
+                        from archery_app.security_logging import log_security_event, SecurityEventType
+                        log_security_event(
+                            event_type=SecurityEventType.USER_ACCOUNT_DELETE,
+                            description=f"User account deleted: User ID {user_id}",
+                            user_id=st.session_state.user_id,
+                            archer_id=selected_user_info["ArcherID"]
+                        )
                     else:
                         st.error(message)
 
@@ -384,6 +420,14 @@ def manage_permissions():
                         st.success(
                             f"Successfully {action_text}ed recorder privileges for {selected_user_info['ArcherName']}"
                         )
+                        # Add logging
+                        from archery_app.security_logging import log_security_event, SecurityEventType
+                        log_security_event(
+                            event_type=SecurityEventType.USER_PRIVILEGE_CHANGE,
+                            description=f"Recorder privilege {'granted to' if new_recorder_status else 'revoked from'} user ID {user_id}",
+                            user_id=st.session_state.user_id,
+                            archer_id=selected_user_info["ArcherID"]
+                        )
                     else:
                         st.error(message)
 
@@ -452,6 +496,9 @@ def manage_account():
                 st.error("Passwords do not match.")
             else:
                 try:
+
+                    # Get selected user's information before password change
+                    selected_user_info = [u for u in users if u["UserID"] == current_user_id][0]
                     conn = get_connection()
                     cursor = conn.cursor()
 
@@ -491,6 +538,8 @@ def manage_account():
         # For reset to default password
         if st.button("Reset to Default Password"):
             try:
+                # Get selected user's information before reset
+                selected_user_info = [u for u in users if u["UserID"] == current_user_id][0]
                 conn = get_connection()
                 cursor = conn.cursor()
 
