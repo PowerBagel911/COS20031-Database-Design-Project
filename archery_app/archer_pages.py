@@ -14,7 +14,7 @@ from archery_app.validators import (
     validate_integer, validate_date, sanitize_input, 
     display_validation_errors, ValidationError
 )
-
+from archery_app.security_logging import log_security_event, SecurityEventType
 def view_personal_scores():
     st.header("View Personal Scores")
 
@@ -189,6 +189,14 @@ def record_practice_score():
             if staged_score_id:
                 st.success(
                     f"Score submitted successfully! Staged Score ID: {staged_score_id}"
+                )
+                # Add logging
+                from archery_app.security_logging import log_security_event, SecurityEventType
+                log_security_event(
+                    event_type=SecurityEventType.SCORE_SUBMIT,
+                    description=f"Score submitted for round ID {round_id}: {total_score} points",
+                    user_id=st.session_state.user_id,
+                    archer_id=archer_id
                 )
             else:
                 st.warning("Score was submitted but couldn't retrieve the ID.")

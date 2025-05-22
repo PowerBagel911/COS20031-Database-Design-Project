@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from archery_app.security_logging import (
     get_security_logs, 
     mark_log_as_reviewed,
+    mark_multiple_logs_as_reviewed,
     get_security_summary,
     SecurityEventType,
     SecuritySeverity
@@ -208,14 +209,73 @@ def display_log_details():
         # Add functionality to mark logs as reviewed
         st.subheader("Mark Logs as Reviewed")
         
-        log_id_to_review = st.number_input("Log ID to Mark as Reviewed", min_value=1, step=1)
+        # Create tabs for single log review and bulk review
+        review_tab1, review_tab2 = st.tabs(["Review Single Log", "Bulk Review"])
         
-        if st.button("Mark as Reviewed"):
-            if mark_log_as_reviewed(log_id_to_review, st.session_state.user_id):
-                st.success(f"Log ID {log_id_to_review} marked as reviewed.")
-                st.rerun()  # Refresh the page to show updated status
+        with review_tab1:
+            log_id_to_review = st.number_input("Log ID to Mark as Reviewed", min_value=1, step=1)
+            
+            if st.button("Mark as Reviewed"):
+                if mark_log_as_reviewed(log_id_to_review, st.session_state.user_id):
+                    st.success(f"Log ID {log_id_to_review} marked as reviewed.")
+                    st.rerun()  # Refresh the page to show updated status
+                else:
+                    st.error("Failed to mark log as reviewed. Please check the Log ID.")
+        
+        with review_tab2:
+            # Filter unreviewed logs for multi-select
+            unreviewed_logs = [log for log in logs if not log["IsReviewed"]]
+            
+            if unreviewed_logs:
+                st.write(f"There are {len(unreviewed_logs)} unreviewed logs matching your filters.")
+                
+                # Create options for multi-select
+                options = {
+                    f"ID: {log['LogID']} - {log['EventTime']} - {log['EventType']}": log["LogID"] 
+                    for log in unreviewed_logs
+                }
+                
+                # Multi-select for logs
+                selected_options = st.multiselect(
+                    "Select logs to mark as reviewed",
+                    options=list(options.keys())
+                )
+                
+                # Get log IDs from selected options
+                selected_log_ids = [options[option] for option in selected_options]
+                
+                # Review all visible logs option
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Mark Selected Logs as Reviewed", disabled=len(selected_log_ids) == 0):
+                        success_count, failed_count = mark_multiple_logs_as_reviewed(
+                            selected_log_ids, 
+                            st.session_state.user_id
+                        )
+                        if success_count > 0:
+                            st.success(f"Successfully marked {success_count} logs as reviewed.")
+                            if failed_count > 0:
+                                st.warning(f"Failed to mark {failed_count} logs as reviewed.")
+                            st.rerun()  # Refresh the page to show updated status
+                        else:
+                            st.error("Failed to mark logs as reviewed.")
+                
+                with col2:
+                    # Option to mark all visible unreviewed logs as reviewed
+                    all_unreviewed_ids = [log["LogID"] for log in unreviewed_logs]
+                    if st.button(f"Mark All {len(all_unreviewed_ids)} Unreviewed Logs", disabled=len(all_unreviewed_ids) == 0):
+                        success_count, failed_count = mark_multiple_logs_as_reviewed(
+                            all_unreviewed_ids, 
+                            st.session_state.user_id
+                        )
+                        if success_count > 0:
+                            st.success(f"Successfully marked {success_count} logs as reviewed.")
+                            if failed_count > 0:
+                                st.warning(f"Failed to mark {failed_count} logs as reviewed.")
+                            st.rerun()  # Refresh the page to show updated status
+                        else:
+                            st.error("Failed to mark logs as reviewed.")
             else:
-                st.error("Failed to mark log as reviewed. Please check the Log ID.")
-        
+                st.info("No unreviewed logs found matching your filters.")
     else:
         st.info("No logs found matching the selected filters.")

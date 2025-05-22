@@ -252,6 +252,47 @@ def mark_log_as_reviewed(log_id, reviewed_by):
         print(f"Error marking log as reviewed: {e}")
         return False
 
+# Mark multiple log entries as reviewed
+def mark_multiple_logs_as_reviewed(log_ids, reviewed_by):
+    """
+    Mark multiple security log entries as reviewed.
+    
+    Args:
+        log_ids (list): List of log IDs to mark as reviewed
+        reviewed_by (int): UserID of the reviewer
+        
+    Returns:
+        tuple: (success_count, failed_count)
+    """
+    if not log_ids:
+        return 0, 0
+        
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Convert list to comma-separated string for SQL IN clause
+        log_ids_str = ','.join(map(str, log_ids))
+        
+        query = f"""
+        UPDATE SecurityLog
+        SET IsReviewed = TRUE, ReviewedBy = %s, ReviewedAt = NOW()
+        WHERE LogID IN ({log_ids_str})
+        """
+        
+        cursor.execute(query, (reviewed_by,))
+        affected_rows = cursor.rowcount
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        
+        return affected_rows, len(log_ids) - affected_rows
+        
+    except Exception as e:
+        print(f"Error marking multiple logs as reviewed: {e}")
+        return 0, len(log_ids)
+
 # Get summary of security events (for dashboard)
 def get_security_summary(days=7):
     """
