@@ -715,7 +715,7 @@ def sql_chatbot():  # Initialize session state variables if not present
     st.markdown("<br>", unsafe_allow_html=True)
     # Clear conversation button centered below chat input
     if st.session_state.messages:
-        cols = st.columns([2, 1, 2])
+        cols = st.columns([0.5, 1, 0.5])
         with cols[1]:
             if st.button("🗑️ Clear Conversation", use_container_width=True):
                 st.session_state.chat_history = None
