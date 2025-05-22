@@ -178,3 +178,144 @@ def verify_connection():
 
     # Return current connection state
     return st.session_state.get("connection_established", False)
+
+
+def get_archer_data_for_competition(competition_id):
+    """Fetches archer data, their scores, and potentially other stats for a given competition."""
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    # This is a starting point. We'll need to join with Score, Archer, etc.
+    # and potentially calculate average scores or other metrics.
+    query = """
+        SELECT 
+            A.ArcherID, 
+            CONCAT(A.FirstName, ' ', A.LastName) AS ArcherName,
+            S.TotalScore, 
+            S.Date AS ScoreDate,
+            R.RoundName,
+            ET.Name AS EquipmentType
+        FROM CompetitionScore CS
+        JOIN Score S ON CS.ScoreID = S.ScoreID
+        JOIN Archer A ON S.ArcherID = A.ArcherID
+        JOIN Round R ON S.RoundID = R.RoundID
+        JOIN EquipmentType ET ON S.EquipmentTypeID = ET.EquipmentTypeID
+        WHERE CS.CompetitionID = %s
+        ORDER BY S.TotalScore DESC, ArcherName ASC;
+    """
+    cursor.execute(query, (competition_id,))
+    archer_data = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return archer_data
+
+
+def get_archer_statistics(archer_id):
+    """
+    Fetches comprehensive statistics for a single archer.
+    
+    Returns dictionary with archer info and statistics including:
+    - Basic info (name, gender, age)
+    - Average score
+    - Highest score
+    - Total scores recorded
+    - Recent scores (last 5)
+    - Equipment type preference
+    - Favorite round type
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Get basic archer info
+    query_info = """
+        SELECT 
+            ArcherID,
+            CONCAT(FirstName, ' ', LastName) AS ArcherName,
+            Gender,
+            DateOfBirth,
+            TIMESTAMPDIFF(YEAR, DateOfBirth, CURDATE()) AS Age,
+            IsActive
+        FROM Archer
+        WHERE ArcherID = %s
+    """
+    cursor.execute(query_info, (archer_id,))
+    archer_info = cursor.fetchone()
+    
+    if not archer_info:
+        cursor.close()
+        conn.close()
+        return None
+    
+    # Get score statistics
+    query_stats = """
+        SELECT 
+            COUNT(*) AS TotalScores,
+            AVG(TotalScore) AS AverageScore,
+            MAX(TotalScore) AS HighestScore,
+            MIN(TotalScore) AS LowestScore
+        FROM Score
+        WHERE ArcherID = %s AND IsApproved = 1
+    """
+    cursor.execute(query_stats, (archer_id,))
+    score_stats = cursor.fetchone()
+    
+    # Get recent scores (last 5)
+    query_recent = """
+        SELECT 
+            S.TotalScore,
+            S.Date,
+            R.RoundName,
+            R.PossibleScore,
+            ET.Name AS EquipmentType
+        FROM Score S
+        JOIN Round R ON S.RoundID = R.RoundID
+        JOIN EquipmentType ET ON S.EquipmentTypeID = ET.EquipmentTypeID
+        WHERE S.ArcherID = %s AND S.IsApproved = 1
+        ORDER BY S.Date DESC
+        LIMIT 5
+    """
+    cursor.execute(query_recent, (archer_id,))
+    recent_scores = cursor.fetchall()
+    
+    # Get preferred equipment type
+    query_equipment = """
+        SELECT 
+            ET.Name AS EquipmentType,
+            COUNT(*) AS UsageCount
+        FROM Score S
+        JOIN EquipmentType ET ON S.EquipmentTypeID = ET.EquipmentTypeID
+        WHERE S.ArcherID = %s AND S.IsApproved = 1
+        GROUP BY S.EquipmentTypeID
+        ORDER BY UsageCount DESC
+        LIMIT 1
+    """
+    cursor.execute(query_equipment, (archer_id,))
+    preferred_equipment = cursor.fetchone()
+    
+    # Get favorite round
+    query_round = """
+        SELECT 
+            R.RoundName,
+            COUNT(*) AS UsageCount
+        FROM Score S
+        JOIN Round R ON S.RoundID = R.RoundID
+        WHERE S.ArcherID = %s AND S.IsApproved = 1
+        GROUP BY S.RoundID
+        ORDER BY UsageCount DESC
+        LIMIT 1
+    """
+    cursor.execute(query_round, (archer_id,))
+    favorite_round = cursor.fetchone()
+    
+    cursor.close()
+    conn.close()
+    
+    # Combine all data
+    stats = {
+        **archer_info,
+        "ScoreStats": score_stats,
+        "RecentScores": recent_scores,
+        "PreferredEquipment": preferred_equipment,
+        "FavoriteRound": favorite_round
+    }
+    
+    return stats
