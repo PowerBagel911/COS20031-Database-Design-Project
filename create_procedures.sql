@@ -55,7 +55,7 @@ BEGIN
       AND (p_StartDate IS NULL OR s.Date >= p_StartDate)
       AND (p_EndDate IS NULL OR s.Date <= p_EndDate)
       AND (p_RoundID IS NULL OR s.RoundID = p_RoundID)
-    ORDER BY s.Date DESC;
+    ORDER BY s.Date DESC, s.TotalScore DESC;
 END //
 DELIMITER ;
 
