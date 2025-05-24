@@ -91,7 +91,7 @@ CREATE PROCEDURE uspGetRoundDetails(
     IN p_RoundID INT
 )
 BEGIN
-    -- Get round information
+    -- Get round information with ranges
     SELECT r.RoundName, r.TotalArrows, r.PossibleScore, r.Description,
            rr.RangeSequence, rr.Distance, rr.NumberOfEnds, rr.ArrowsPerEnd,
            tf.Size AS TargetFaceSize, tf.Description AS TargetFaceDescription
@@ -100,6 +100,34 @@ BEGIN
     JOIN TargetFace tf ON rr.TargetFaceID = tf.TargetFaceID
     WHERE r.RoundID = p_RoundID
     ORDER BY rr.RangeSequence;
+    
+    -- Get equivalent rounds where this round is the base round
+    SELECT 'This round is base for:' AS EquivalentType,
+           c.ClassName, et.Name AS EquipmentType, 
+           equiv_r.RoundName AS EquivalentRoundName,
+           er.EffectiveDate, er.ExpiryDate
+    FROM EquivalentRound er
+    JOIN Class c ON er.ClassID = c.ClassID
+    JOIN EquipmentType et ON er.EquipmentTypeID = et.EquipmentTypeID
+    JOIN Round equiv_r ON er.EquivalentRoundRefID = equiv_r.RoundID
+    WHERE er.BaseRoundID = p_RoundID
+    AND (er.ExpiryDate IS NULL OR er.ExpiryDate >= CURDATE())
+    
+    UNION ALL
+    
+    -- Get base rounds where this round is an equivalent
+    SELECT 'This round is equivalent to:' AS EquivalentType,
+           c.ClassName, et.Name AS EquipmentType,
+           base_r.RoundName AS EquivalentRoundName,
+           er.EffectiveDate, er.ExpiryDate
+    FROM EquivalentRound er
+    JOIN Class c ON er.ClassID = c.ClassID
+    JOIN EquipmentType et ON er.EquipmentTypeID = et.EquipmentTypeID
+    JOIN Round base_r ON er.BaseRoundID = base_r.RoundID
+    WHERE er.EquivalentRoundRefID = p_RoundID
+    AND (er.ExpiryDate IS NULL OR er.ExpiryDate >= CURDATE())
+    
+    ORDER BY EquivalentType, ClassName, EquipmentType;
 END //
 DELIMITER ;
 

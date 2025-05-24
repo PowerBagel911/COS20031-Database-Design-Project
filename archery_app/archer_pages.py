@@ -222,14 +222,105 @@ def view_round_definitions():
             # Call the stored procedure
             cursor.callproc("uspGetRoundDetails", [round_id])
 
-            # Fixed: Use proper syntax to iterate through results
+            # Get all result sets from the stored procedure
             results = list(cursor.stored_results())
+            
             if results:
-                details = results[0].fetchall()
-                if details:
-                    st.subheader(f"Details for {selected_round.split(' - ')[1]}")
-                    df = pd.DataFrame(details)
-                    st.dataframe(df)
+                # First result set: Round definition details
+                round_details = results[0].fetchall()
+                if round_details:
+                    st.subheader(f"🎯 Round Definition: {selected_round.split(' - ')[1]}")
+                    
+                    # Display basic round info from first row
+                    first_row = round_details[0]
+                    
+                    # Create info cards for basic round information
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Arrows", first_row['TotalArrows'])
+                    with col2:
+                        st.metric("Possible Score", first_row['PossibleScore'])
+                    with col3:
+                        st.metric("Number of Ranges", len(round_details))
+                    
+                    # Display description if available
+                    if first_row.get('Description'):
+                        st.info(f"**Description:** {first_row['Description']}")
+                    
+                    # Display detailed range information
+                    st.subheader("📏 Range Details")
+                    
+                    # Create a cleaner display for ranges
+                    range_data = []
+                    for detail in round_details:
+                        range_data.append({
+                            "Range": detail['RangeSequence'],
+                            "Distance (m)": detail['Distance'],
+                            "Number of Ends": detail['NumberOfEnds'],
+                            "Arrows per End": detail['ArrowsPerEnd'],
+                            "Total Arrows": detail['NumberOfEnds'] * detail['ArrowsPerEnd'],
+                            "Target Face": f"{detail['TargetFaceSize']}cm",
+                            "Target Description": detail['TargetFaceDescription']
+                        })
+                    
+                    df_ranges = pd.DataFrame(range_data)
+                    st.dataframe(df_ranges, use_container_width=True, hide_index=True)
+                    
+                    # Second result set: Equivalent rounds (if available)
+                    if len(results) > 1:
+                        equivalent_rounds = results[1].fetchall()
+                        if equivalent_rounds:
+                            st.markdown("---")  # Add a separator
+                            st.subheader("🔄 Equivalent Rounds")
+                            
+                            # Group equivalent rounds by type
+                            base_rounds = []
+                            equivalent_to_rounds = []
+                            
+                            for equiv in equivalent_rounds:
+                                if equiv['EquivalentType'] == 'This round is base for:':
+                                    base_rounds.append(equiv)
+                                else:
+                                    equivalent_to_rounds.append(equiv)
+                            
+                            # Display base rounds (rounds this round is the base for)
+                            if base_rounds:
+                                st.write("**This round serves as the base round for:**")
+                                base_data = []
+                                for base in base_rounds:
+                                    base_data.append({
+                                        "Class": base['ClassName'],
+                                        "Equipment Type": base['EquipmentType'],
+                                        "Equivalent Round": base['EquivalentRoundName'],
+                                        "Effective Date": base['EffectiveDate'],
+                                        "Expiry Date": base['ExpiryDate'] if base['ExpiryDate'] else "No Expiry"
+                                    })
+                                
+                                df_base = pd.DataFrame(base_data)
+                                st.dataframe(df_base, use_container_width=True, hide_index=True)
+                            
+                            # Display equivalent rounds (rounds this round is equivalent to)
+                            if equivalent_to_rounds:
+                                st.write("**This round is equivalent to:**")
+                                equiv_data = []
+                                for equiv in equivalent_to_rounds:
+                                    equiv_data.append({
+                                        "Class": equiv['ClassName'],
+                                        "Equipment Type": equiv['EquipmentType'],
+                                        "Base Round": equiv['EquivalentRoundName'],
+                                        "Effective Date": equiv['EffectiveDate'],
+                                        "Expiry Date": equiv['ExpiryDate'] if equiv['ExpiryDate'] else "No Expiry"
+                                    })
+                                
+                                df_equiv = pd.DataFrame(equiv_data)
+                                st.dataframe(df_equiv, use_container_width=True, hide_index=True)
+                            
+                            
+                        else:
+                            st.info("ℹ️ No equivalent rounds defined for this round.")
+                    else:
+                        st.info("ℹ️ No equivalent rounds information available.")
+                        
                 else:
                     st.info("No details found for the selected round.")
             else:
