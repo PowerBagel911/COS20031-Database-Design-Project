@@ -5,4 +5,4 @@ google-generativeai>=0.3.2          # [4] For Gemini 2.0 Flash API
 SQLAlchemy==2.0.41                  # [5]
 PyMySQL                             # Latest on PyPI
 numpy==2.2.6
-matplotlib==3.8.0                   # [7] For data visualization
+matplotlib                  # [7] For data visualization
