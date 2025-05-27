@@ -24,6 +24,7 @@ from archery_app.recorder_pages import (
 from archery_app.admin_pages import manage_users, manage_permissions, manage_account
 from archery_app.chatbot import sql_chatbot
 from archery_app.live_competition_view import display_live_competition_view
+from archery_app.performance_analytics import show_performance_analytics
 
 # Set page configuration
 st.set_page_config(
@@ -167,6 +168,11 @@ def main_page():
             st.session_state.current_page = "Live Competition View"
             st.rerun()
 
+        # Add Live Competition View - accessible to all logged-in users
+        if st.sidebar.button("📅 Performance Analytics", use_container_width=True):
+            st.session_state.current_page = "Performance Analytics"
+            st.rerun()
+
         # Separate menus with headers
         st.sidebar.subheader("Archer Functions")  # Always available options
         archer_options = [
@@ -263,6 +269,8 @@ def main_page():
         manage_account()
     elif st.session_state.current_page == "Live Competition View":
         display_live_competition_view()
+    elif st.session_state.current_page == "Performance Analytics":
+        show_performance_analytics()
     else:
         st.session_state.current_page = "Home"
         st.rerun()
