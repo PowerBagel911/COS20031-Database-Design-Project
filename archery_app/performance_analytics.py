@@ -167,6 +167,7 @@ def get_performance_insights(archer_stats):
         insights.append(f"🎯 **Getting Started**: {total_scores} scores recorded, keep practicing!")
     
     # Recent Performance Trend (if we have recent scores)
+    avg_score = float(avg_score)
     if len(recent_scores) >= 3:
         recent_avg = np.mean([score['TotalScore'] for score in recent_scores[:3]])
         if recent_avg > avg_score:
