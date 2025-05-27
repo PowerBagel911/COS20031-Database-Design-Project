@@ -190,8 +190,8 @@ def display_betting_interface(archers_list, odds_list, mode="1v1"):
         - **Higher odds** (e.g., 4.00) mean lower chance of winning but larger payout
         
         For example:
-        - If you bet $100 on odds of 1.50 and win, you get $150 back ($50 profit)
-        - If you bet $100 on odds of 4.00 and win, you get $400 back ($300 profit)
+        - If you bet \$100 on odds of 1.50 and win, you get \$150 back (\$50 profit)
+        - If you bet \$100 on odds of 4.00 and win, you get \$400 back (\$300 profit)
         
         The archer with the lowest odds is considered the favorite to win.
         """)
